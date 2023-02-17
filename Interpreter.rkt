@@ -5,6 +5,10 @@
   (lambda (list)
     (car list)))
 
+(define operand
+  (lambda (list)
+    (car (cdr list))))
+
 (define leftoperand
   (lambda list
     (car (cdr list))))
@@ -52,13 +56,6 @@
       [(eq? (operator expr) 'def) (cons (cons (leftoperand expr) (Minteger (rightoperand expr) state)) state)]
       (else (error 'unknownop "Bad Operator")))))
 
-
-(define Mwhile
-  (lambda (expr state)
-    (cond
-      [(Mbool (car expr) state) (Mwhile (cdr expr) state)]
-      (else state))))
-
 (define inList
   (lambda (k lis)
     (cond
@@ -70,22 +67,10 @@
   (lambda (var state)
     (inList var (car lis))
 
-(define Mdeclare
-  (lambda (expr state)
-    (cond
-      [(and (eq? (operator expr) '=) (MAddState leftoperand (Minteger (rightoperand state)) (MRemoveState leftoperand state)))]
-      (else (error 'unknownop "Bad Operator")))))
-
 
 (define MRemoveState
   (lambda (var state)
     
-
-(define Mif
-  (lambda (expr state)
-    (cond
-      [(Mbool (car expr) state) (Mif (cdr expr) state)]
-      (else state))))
       
 ; adds a state to the state table from a declaration expression
 (define MAddState
@@ -97,7 +82,7 @@
     )))
 
 (define getState
-  (lambda state varName
+  (lambda (state varName)
     (cond
       [(or (null? (car state)) (null? (car (cdr state))))                                                   '()]
       [(eq? (varName) (car (car state)))                                                      (car (cdr state))]
@@ -127,4 +112,54 @@
       ((null? list) #f)
       ((eq? x (car list)) #t)
       (else member? x (cdr list)))))
+
+
+(define M_declare
+  (lambda (expr state)
+    (cons (operand) (cons '$null$ '()))))
+
+
+(define M_assign
+  (lambda (expr state)
+      (MAddState leftoperand (Minteger (rightoperand state)) (MRemoveState leftoperand state)))]
+
+
+(define Mif
+  (lambda (expr state)
+    (cond
+      [(Mbool (car expr) state) (Mif (cdr expr) state)])))
+
+
+(define Mwhile
+  (lambda (expr state)
+    (cond
+      [(Mbool (car expr) state) (Mwhile (cdr expr) state)]
+      (else state))))
+
+
+(define M_statement
+  (lambda (expr state)
+    [(eq? (operator expr) 'var)   (M_assign  (operand expr) state]
+    [(eq? (operator expr) '=)     (M_assign (operand expr) state]
+    [(eq? (operator expr) 'if)    (M_if      (operand expr) state]
+    [(eq? (operator expr) 'while) (M_while   (operand expr) state]
+    (else (error 'unknownop "Bad Statement"))))) ))
+
+; this isn't right, it need to be fixed so it removes a value
+(define removeVar 
+  (lambda (var state)
+    (cond
+      [(null? state) (cons '() '())]
+      [(eq? (car (car lis)) var) (cons (cdr (car lis)) (cdr (cdr lis)))))]
+      [else (cons (car lis) (removeVar var (cdr lis)))])))
     
+
+; this needs to be fixed because it only works if the variable hasn't been declared yet
+(define StateUpdate
+  (lambda (declared state)
+    (cond
+      [(declared? declared state) (cons (cons (car declared) (car state)) (remove (car declared) state))]
+
+(define M_statementlist
+  (lambda (expr state)
+    (M_statementlist (cdr expr) (StateUpdate (M_statement (car expr) state) state)))
