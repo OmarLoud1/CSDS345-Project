@@ -2,4 +2,4 @@
 
 (require "simpleParser.rkt")
 
-(parser "Test_Code_elseif.rtf")
+(parser "test.txt")
