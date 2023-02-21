@@ -12,6 +12,7 @@
 (Minteger '(% (/ 6 2) (- 4 2)) '())
 1
 
+
 (Mbool '(&& #t #t) '())
 (Mbool '(|| #t #f) '())
 (Mbool '(! #t) '())
@@ -21,3 +22,9 @@
 (Mbool '(> 5 2) '())
 (Mbool '(>= 5 5) '())
 (Mbool '(<= 5 5) '())
+
+(getState 'd '((a b c d e f) (1 2 3 4 5 6)))
+
+
+(StateUpdate '(g 7) '((a b c d e f) (1 2 3 4 5 6)))
+(StateUpdate '(d 7) '((a b c d e f) (1 2 3 4 5 6)))

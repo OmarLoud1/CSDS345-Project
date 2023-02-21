@@ -28,8 +28,21 @@
 
 (define rightoperand
   (lambda (list)
-    (car (cdr (cdr list)))))
+    (if (or (null? (cdr list)) (null? (cdr (cdr list))))
+        '()
+        (car (cdr (cdr list))))))
 
+(define vars
+  (lambda (state)
+    (car state)))
+
+(define vals
+  (lambda (state)
+    (car (cdr state))))
+
+(define parameters
+  (lambda (expr)
+    (cdr expr)))
 
 (provide Minteger)
 ; Finds the integer value of an expression
@@ -37,6 +50,7 @@
   (lambda (expr state)
     (cond
       ((number? expr) expr)
+      ((not (list? expr))       (getState expr state))
       ((eq? (operator expr) '+) (+         (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
       ((eq? (operator expr) '-) (-         (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
       ((eq? (operator expr) '*) (*         (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
@@ -114,14 +128,16 @@
 
 ; delares a variable
 (define M_declare
-  (lambda (expr state)
-    (list (operand) '$null$ )))
+  (lambda (var val state)
+    (if (null? val)
+        (list var '$null$)
+        (list var (Minteger val state)))))
 
 
 ; assigns a value to a variable
 (define M_assign
   (lambda (var val state)
-      (list var (Minteger (val)))))
+      (list var (Minteger val state))))
 
 
 ; executes an if expression given a condition, an expression to execute if true, an expression to execute if false, and the state
@@ -145,7 +161,7 @@
   (lambda (expr state)
     (cond
       [(eq? (operator expr) 'return)                                       (Mbool (operand expr) state)]
-      [(eq? (operator expr) 'var)                                      (M_declare (operand expr) state)]
+      [(eq? (operator expr) 'var)              (M_declare (leftoperand expr) (rightoperand expr) state)]
       [(eq? (operator expr) '=)                 (M_assign (leftoperand expr) (rightoperand expr) state)]
       [(eq? (operator expr) 'if)     (M_if (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state)]
       [(eq? (operator expr) 'while)              (M_while (leftoperand expr) (rightoperand expr) state)]
@@ -171,8 +187,9 @@
 ; adds the declared variable to the state, removes past instance of it
 (define addState
   (lambda (declared state)
-    (cons (cons (car declared) (car state)) (cons (cdr declared) (cdr state)))))
+    (list (cons (car declared) (vars state)) (cons (vals declared) (vals state)))))
 
+(provide StateUpdate)
 ; updates status given a declared variable
 (define StateUpdate
   (lambda (declared state)
@@ -183,5 +200,8 @@
   (lambda (expr state)
     (M_statementlist (cdr expr) (StateUpdate (M_statement (car expr) state) state))))
 
+(define run
+  (lambda (expr)
+    (M_statementlist expr '(() ()))))
 
-
+(run (parser "test.txt"))
