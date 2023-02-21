@@ -152,7 +152,7 @@
 (define M_while
   (lambda (condition expr state)
     (cond
-      [(Mbool condition state) (M_while condition expr (StateUpdate (M_statement expr state)))]
+      [(Mbool condition state) (M_while condition expr (StateUpdate (M_statement expr state) state))]
       [else state])))
 
 
