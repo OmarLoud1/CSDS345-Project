@@ -32,7 +32,7 @@
 
 
 (provide Minteger)
-; Finds the integer value o an expression
+; Finds the integer value of an expression
 (define Minteger
   (lambda (expr state)
     (cond
@@ -44,10 +44,12 @@
       ((eq? (operator expr) '%) (remainder (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
       (else (error 'unknownop "Bad Operator"))))) 
 
+; tests if two expressions are not equal
 (define neq?
   (lambda (expr1 expr2)
     (not (eq? expr1 expr2))))
 
+; Finds the boolean value of an expression
 (provide Mbool)
 (define Mbool
   (lambda (expr state)
@@ -73,19 +75,21 @@
       ((eq? x (car list)) #t)
       (else member? x (cdr list)))))
 
+; checks if a variable is initialized
 (define initialized?
   (lambda (var state)
     (member? var (car state))))
 
 
-; I have no idea what this does
+(provide getState)
+; Gets the value of a variable
 (define getState
-  (lambda (state varName)
+  (lambda (varName state)
     (cond
-      [(or (null? (car state)) (null? (car (cdr state))))                                                   '()]
-      [(eq? (varName) (car (car state)))                                                      (car (cdr state))]
-      [(not (eq? (varName) (car (car state))))            (getState (list (cdr (car state)) (cdr (cdr state))))]
-      [else                                   (error 'gStateError "There was a problem finding that variable.")]
+      [(or (null? (car state)) (null? (car (cdr state))))                                                        '()]
+      [(eq? varName (car (car state)))                                                            (car (cadr state))]
+      [(not (eq? varName (car (car state))))          (getState varName (list (cdr (car state)) (cdr (cadr state))))]
+      [else                                        (error 'gStateError "There was a problem finding that variable.")]
     )
   )
 )  
@@ -178,7 +182,6 @@
 (define M_statementlist
   (lambda (expr state)
     (M_statementlist (cdr expr) (StateUpdate (M_statement (car expr) state) state))))
-
 
 
 
