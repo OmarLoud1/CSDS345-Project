@@ -101,7 +101,7 @@
   (lambda (varName state)
     (cond
       [(or (null? (car state)) (null? (car (cdr state))))                                                        '()]
-      [(eq? varName (car (car state)))                                                            (car (cadr state))]
+      [(eq? varName (car (vars state)))                                                           (car (cadr state))]
       [(not (eq? varName (car (car state))))          (getState varName (list (cdr (car state)) (cdr (cadr state))))]
       [else                                        (error 'gStateError "There was a problem finding that variable.")]
     )
@@ -152,7 +152,7 @@
 (define M_while
   (lambda (condition expr state)
     (cond
-      [(Mbool condition state) (M_while condition expr (M_statement(expr state)))]
+      [(Mbool condition state) (M_while condition expr (StateUpdate (M_statement expr state)))]
       [else state])))
 
 
@@ -198,7 +198,9 @@
 ; iterates across statement list executing expressions
 (define M_statementlist
   (lambda (expr state)
-    (M_statementlist (cdr expr) (StateUpdate (M_statement (car expr) state) state))))
+    (if (null? (cdr expr))
+        (StateUpdate (M_statement (car expr) state) state)
+        (M_statementlist (cdr expr) (StateUpdate (M_statement (car expr) state) state)))))
 
 (define run
   (lambda (expr)
