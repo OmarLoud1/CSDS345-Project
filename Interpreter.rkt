@@ -1,4 +1,11 @@
 #lang racket
+(require "simpleParser.rkt")
+
+(define intrepret
+  (lambda (file)
+    (M_statement (parser file) '(()()) )
+  )
+)
 
 ; splitting expr
 (define operator
@@ -8,6 +15,12 @@
 (define operand
   (lambda (list)
     (car (cdr list))))
+
+(define operandn
+  (lambda (n list)
+    (if (zero? n) 
+      (car list)
+      (operandn (- n 1) (cdr list)))))
 
 (define leftoperand
   (lambda list
@@ -61,11 +74,11 @@
     (cond
       [(null? lis) #f]
       [(eq? (car lis) k) #t]
-      [(inList var (cdr lis))]
+      [(inList var (cdr lis))])))
 
 (define initialized?
   (lambda (var state)
-    (inList var (car lis))
+    (inList var (car lis))))
 
 
 (define MRemoveState
@@ -74,11 +87,9 @@
       
 ; adds a state to the state table from a declaration expression
 (define MAddState
-  (lambda (state expr1)
+  (lambda (state varName val)
     (cond
-    [(null? state) 'NoState]
-    [(eq? (car (cdr expr1)) (car (car state)))  (cons (car state)   ]
-    [()]
+    [else                                   (error 'gStateError "There was a problem adding that variable.")]
     )))
 
 (define getState
@@ -121,17 +132,19 @@
 
 (define M_assign
   (lambda (expr state)
-      (MAddState leftoperand (Minteger (rightoperand state)) (MRemoveState leftoperand state)))]
+      (MAddState leftoperand (Minteger (rightoperand state)) (MRemoveState leftoperand state))
+      ))
 
 
 (define Mif
-  (lambda (expr state)
+  (lambda (condition expr exprelse state)
     (cond
-      [(Mbool (car expr) state) (Mif (cdr expr) state)])))
+      [(eq? (Mbool condition state) #t) (M_statement expr)]
+      [(eq? (Mbool condition state) #f) (M_statement exprelse)]
 
 
 (define Mwhile
-  (lambda (expr state)
+  (lambda (cond expr state)
     (cond
       [(Mbool (car expr) state) (Mwhile (cdr expr) state)]
       (else state))))
@@ -139,10 +152,12 @@
 
 (define M_statement
   (lambda (expr state)
-    [(eq? (operator expr) 'var)   (M_assign  (operand expr) state]
-    [(eq? (operator expr) '=)     (M_assign (operand expr) state]
-    [(eq? (operator expr) 'if)    (M_if      (operand expr) state]
-    [(eq? (operator expr) 'while) (M_while   (operand expr) state]
+  
+    [(eq? (operator expr) 'return) (Mbool (operand expr) state)]
+    [(eq? (operator expr) 'var)   (M_declare  (operand expr) state)]
+    [(eq? (operator expr) '=)     (M_assign  (operand expr) state)]
+    [(eq? (operator expr) 'if)    (M_if      (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state)]
+    [(eq? (operator expr) 'while) (M_while   (leftoperand expr) (rightoperand expr) state)]
     (else (error 'unknownop "Bad Statement"))))) ))
 
 ; this isn't right, it need to be fixed so it removes a value
@@ -150,16 +165,41 @@
   (lambda (var state)
     (cond
       [(null? state) (cons '() '())]
-      [(eq? (car (car lis)) var) (cons (cdr (car lis)) (cdr (cdr lis)))))]
+      ((eq? (car (car lis)) var) (cons (cdr (car lis)) (cdr (cdr lis))))
       [else (cons (car lis) (removeVar var (cdr lis)))])))
     
+
+
+(define myappend
+  (lambda (a b)
+    (if (null? a)
+        b
+        (cons (car a) (myappend (cdr a) b)))))
+
+(define remove
+  (lambda (declared state return)
+    (cond
+      [(null? state) (return '() '())]
+      [(eq? (car (car state)) (car declared)) (return (cdr (car state)) (cdr state))]
+      [else (remove declared (cdr state) return)])))
+
+(define remove
+  (lambda (declared state)
+    (remove-cps declared state (lambda (v1 v2) (list v1 v2)))))
+
+(define addState
+  (lambda (declared state)
+    (cons (cons (car declared) (car state)) (cons (cdr declared) (cdr state)))))
 
 ; this needs to be fixed because it only works if the variable hasn't been declared yet
 (define StateUpdate
   (lambda (declared state)
-    (cond
-      [(declared? declared state) (cons (cons (car declared) (car state)) (remove (car declared) state))]
+    (addState declared (remove declared state))))
 
 (define M_statementlist
   (lambda (expr state)
-    (M_statementlist (cdr expr) (StateUpdate (M_statement (car expr) state) state)))
+    (M_statementlist (cdr expr) (StateUpdate (M_statement (car expr) state) state))))
+
+
+
+
