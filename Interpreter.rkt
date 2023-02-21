@@ -18,9 +18,10 @@
 
 (define operandn
   (lambda (n list)
-    (if (zero? n) 
-      (car list)
-      (operandn (- n 1) (cdr list)))))
+    (cond
+     ((null? list) list)
+     ((zero? n) (car list))
+     (else (operandn (- n 1) (cdr list))))))
 
 (define leftoperand
   (lambda (list)
@@ -51,6 +52,7 @@
     (cond
       ((number? expr) expr)
       ((not (list? expr))       (getState expr state))
+      ((and (empty? (rightoperand expr)) (eq? (operator expr) '-)) (- 0  (Minteger (leftoperand expr) state)))
       ((eq? (operator expr) '+) (+         (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
       ((eq? (operator expr) '-) (-         (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
       ((eq? (operator expr) '*) (*         (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
@@ -145,7 +147,8 @@
   (lambda (condition expr exprelse state)
     (cond
       [(eq? (Mbool condition state) #t)     (StateUpdate (M_statement expr state) state)]
-      [(eq? (Mbool condition state) #f) (StateUpdate (M_statement exprelse state) state)])))
+      [(not(null? exprelse)) (StateUpdate (M_statement exprelse state) state)]
+      [else state])))
 
 
 ; executes a while loop given a condition, an expression to execute while true, and the state
@@ -246,4 +249,4 @@
   (lambda (expr)
     (M_statementlist expr '(() ()))))
 
-(run (parser "tests/test1.txt"))
+(run (parser "tests/test18.txt"))
