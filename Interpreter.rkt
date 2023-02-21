@@ -23,14 +23,15 @@
       (operandn (- n 1) (cdr list)))))
 
 (define leftoperand
-  (lambda list
+  (lambda (list)
     (car (cdr list))))
 
 (define rightoperand
-  (lambda list
+  (lambda (list)
     (car (cdr (cdr list)))))
 
 
+(provide Minteger)
 ; Finds the integer value o an expression
 (define Minteger
   (lambda (expr state)
@@ -43,10 +44,11 @@
       ((eq? (operator expr) '%) (remainder (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
       (else (error 'unknownop "Bad Operator"))))) 
 
-(define !=
-  (lambda (expr)
-    (not (expr))))
+(define neq?
+  (lambda (expr1 expr2)
+    (not (eq? expr1 expr2))))
 
+(provide Mbool)
 (define Mbool
   (lambda (expr state)
     (cond
@@ -55,10 +57,10 @@
       [(eq? (operator expr) '||) (or       (Mbool    (leftoperand expr) state) (Mbool    (rightoperand expr) state))]
       [(eq? (operator expr) '!)  (not      (Mbool    (leftoperand expr) state))]
       [(eq? (operator expr) '==) (eq?      (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
-      [(eq? (operator expr) '!=) (         (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
+      [(eq? (operator expr) '!=) (neq?     (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
       [(eq? (operator expr) '<)  (<        (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
       [(eq? (operator expr) '>)  (>        (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
-      [(eq? (operator expr) '>=) (<=       (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
+      [(eq? (operator expr) '<=) (<=       (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
       [(eq? (operator expr) '>=) (>=       (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
 
       (else (error 'unknownop "Bad Operator")))))
@@ -119,7 +121,7 @@
 
 
 ; executes an if expression given a condition, an expression to execute if true, an expression to execute if false, and the state
-(define Mif
+(define M_if
   (lambda (condition expr exprelse state)
     (cond
       [(eq? (Mbool condition state) #t) (M_statement expr)]
@@ -127,10 +129,10 @@
 
 
 ; executes a while loop given a condition, an expression to execute while true, and the state
-(define Mwhile
+(define M_while
   (lambda (condition expr state)
     (cond
-      [(Mbool condition state) (Mwhile condition expr (M_statement(expr state)))]
+      [(Mbool condition state) (M_while condition expr (M_statement(expr state)))]
       [else state])))
 
 
@@ -146,6 +148,7 @@
       [else (error 'unknownop "Bad Statement")])))
 
 
+(provide removevar-cps)
  ; cps helper function for remove   
 (define removevar-cps
   (lambda (declared statevars statevals return)
@@ -155,6 +158,7 @@
       [else (removevar-cps declared (cdr statevars) (cdr statevals) 
                                   (lambda (v1 v2) (return (cons (car statevars) v1) (cons (car statevals) v2))))])))
 
+(provide removevar)
 ; removes the declared variable from the state
 (define removevar
   (lambda (declared state)
