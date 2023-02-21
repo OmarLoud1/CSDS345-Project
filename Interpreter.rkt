@@ -246,4 +246,4 @@
   (lambda (expr)
     (M_statementlist expr '(() ()))))
 
-(run (parser "test.txt"))
+(run (parser "tests/test1.txt"))
