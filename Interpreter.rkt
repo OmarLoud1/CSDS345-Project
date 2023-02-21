@@ -130,22 +130,22 @@
 (define M_declare
   (lambda (var val state)
     (if (null? val)
-        (list var '$null$)
-        (list var (Minteger val state)))))
+        (StateUpdate (list var '$null$) state)
+        (StateUpdate (list var (Minteger val state)) state))))
 
 
 ; assigns a value to a variable
 (define M_assign
   (lambda (var val state)
-      (list var (Minteger val state))))
+      (StateUpdate (list var (Minteger val state)) state)))
 
 
 ; executes an if expression given a condition, an expression to execute if true, an expression to execute if false, and the state
 (define M_if
   (lambda (condition expr exprelse state)
     (cond
-      [(eq? (Mbool condition state) #t) (M_statement expr state)]
-      [(eq? (Mbool condition state) #f) (M_statement exprelse state)])))
+      [(eq? (Mbool condition state) #t)     (StateUpdate (M_statement expr state) state)]
+      [(eq? (Mbool condition state) #f) (StateUpdate (M_statement exprelse state) state)])))
 
 
 ; executes a while loop given a condition, an expression to execute while true, and the state
@@ -157,7 +157,7 @@
 
 (define M_return
   (lambda (expr state)
-    (list 'return (M_statement expr state))))
+    (StateUpdate (list 'return (M_statement expr state)) state)))
 
 
 ; determines the type of statement and executes its function
@@ -239,8 +239,8 @@
 (define M_statementlist
   (lambda (expr state)
     (if (null? (cdr expr))
-        (getState 'return (StateUpdate (M_statement (car expr) state) state))
-        (M_statementlist (cdr expr) (StateUpdate (M_statement (car expr) state) state)))))
+        (getState 'return (M_statement (car expr) state))
+        (M_statementlist (cdr expr) (M_statement (car expr) state)))))
 
 (define run
   (lambda (expr)
