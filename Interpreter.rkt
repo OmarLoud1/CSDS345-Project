@@ -144,8 +144,8 @@
 (define M_if
   (lambda (condition expr exprelse state)
     (cond
-      [(eq? (Mbool condition state) #t) (M_statement expr)]
-      [(eq? (Mbool condition state) #f) (M_statement exprelse)])))
+      [(eq? (Mbool condition state) #t) (M_statement expr state)]
+      [(eq? (Mbool condition state) #f) (M_statement exprelse state)])))
 
 
 ; executes a while loop given a condition, an expression to execute while true, and the state
@@ -155,17 +155,54 @@
       [(Mbool condition state) (M_while condition expr (StateUpdate (M_statement expr state) state))]
       [else state])))
 
+(define M_return
+  (lambda (expr state)
+    (list 'return (M_statement expr state))))
+
 
 ; determines the type of statement and executes its function
 (define M_statement
   (lambda (expr state)
     (cond
-      [(eq? (operator expr) 'return)                                       (Mbool (operand expr) state)]
+      [(intexp? expr)                                                             (Minteger expr state)]
+      [(boolexp? expr)                                                               (Mbool expr state)]
+      [(eq? (operator expr) 'return)                                    (M_return (operand expr) state)]
       [(eq? (operator expr) 'var)              (M_declare (leftoperand expr) (rightoperand expr) state)]
       [(eq? (operator expr) '=)                 (M_assign (leftoperand expr) (rightoperand expr) state)]
       [(eq? (operator expr) 'if)     (M_if (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state)]
       [(eq? (operator expr) 'while)              (M_while (leftoperand expr) (rightoperand expr) state)]
       [else (error 'unknownop "Bad Statement")])))
+
+
+(define intexp?
+  (lambda (expr)
+    (cond
+      ((number? expr) #t)
+      ((not (list? expr)) #t)
+      ((eq? (operator expr) '+) #t)
+      ((eq? (operator expr) '-) #t)
+      ((eq? (operator expr) '*) #t)
+      ((eq? (operator expr) '/) #t)
+      ((eq? (operator expr) '%) #t)
+      (else #f))))
+
+; Finds the boolean value of an expression
+(define boolexp?
+  (lambda (expr)
+    (cond
+      [(boolean? expr) expr]
+      [(eq? (operator expr) '&&) #t]
+      [(eq? (operator expr) '||) #t]
+      [(eq? (operator expr) '!)  #t]
+      [(eq? (operator expr) '==) #t]
+      [(eq? (operator expr) '!=) #t]
+      [(eq? (operator expr) '<)  #t]
+      [(eq? (operator expr) '>)  #t]
+      [(eq? (operator expr) '<=) #t]
+      [(eq? (operator expr) '>=) #t]
+
+      (else #f))))
+    
 
 
 (provide removevar-cps)
@@ -193,13 +230,16 @@
 ; updates status given a declared variable
 (define StateUpdate
   (lambda (declared state)
-    (addState declared (removevar declared state))))
+    (cond
+      [(or (null? declared) (null? (car declared))) state]
+      [(list? (vars declared)) (StateUpdate (list (car (vars declared)) (car (vals declared))) (StateUpdate (list (cdr (vars declared)) (cdr (vals declared))) state))]
+      [else (addState declared (removevar declared state))])))
 
 ; iterates across statement list executing expressions
 (define M_statementlist
   (lambda (expr state)
     (if (null? (cdr expr))
-        (StateUpdate (M_statement (car expr) state) state)
+        (getState 'return (StateUpdate (M_statement (car expr) state) state))
         (M_statementlist (cdr expr) (StateUpdate (M_statement (car expr) state) state)))))
 
 (define run
