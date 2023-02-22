@@ -71,6 +71,9 @@
   (lambda (expr state)
     (cond
       [(boolean? expr) expr]
+      [(eq? 'true expr) 'true]
+      [(eq? 'false expr) 'false]
+      ((not (list? expr))       (getState expr state))
       [(eq? (operator expr) '&&) (and      (Mbool    (leftoperand expr) state) (Mbool    (rightoperand expr) state))]
       [(eq? (operator expr) '||) (or       (Mbool    (leftoperand expr) state) (Mbool    (rightoperand expr) state))]
       [(eq? (operator expr) '!)  (not      (Mbool    (leftoperand expr) state))]
@@ -81,6 +84,7 @@
       [(eq? (operator expr) '<=) (<=       (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
       [(eq? (operator expr) '>=) (>=       (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
 
+
       (else (error 'unknownop "Bad Operator")))))
 
 ; checks if a variable is in a list
@@ -89,7 +93,7 @@
     (cond
       ((null? list) #f)
       ((eq? x (car list)) #t)
-      (else member? x (cdr list)))))
+      (else (member? x (cdr list))))))
 
 ; checks if a variable is initialized
 (define initialized?
@@ -102,7 +106,8 @@
 (define getState
   (lambda (varName state)
     (cond
-      [(or (null? (car state)) (null? (car (cdr state))))                                                        '()]
+      [(or (null? (car state)) (null? (car (cdr state)))) (error 'gStateError "There was a problem finding that variable.")]
+      [(and (eq? varName (car (vars state))) (eq? '$null$ (car (vals state))))   (error 'gStateError "This variable has not been assigned a value.")]
       [(eq? varName (car (vars state)))                                                           (car (cadr state))]
       [(not (eq? varName (car (car state))))          (getState varName (list (cdr (car state)) (cdr (cadr state))))]
       [else                                        (error 'gStateError "There was a problem finding that variable.")]
@@ -127,19 +132,35 @@
       [(eq? (car lis) var) (cdr lis)]
       [else (cons (car lis) (remove var (cdr lis)))])))
 
+;; checks if a variable is declared
+(define declared?
+  (lambda (var state)
+    (member? var (vars state))))
+
 
 ; delares a variable
 (define M_declare
   (lambda (var val state)
     (if (null? val)
         (StateUpdate (list var '$null$) state)
-        (StateUpdate (list var (Minteger val state)) state))))
+        (StateUpdate (list var (Mval val state)) state))))
 
 
 ; assigns a value to a variable
 (define M_assign
   (lambda (var val state)
-      (StateUpdate (list var (Minteger val state)) state)))
+    (if (declared? var state)
+      (StateUpdate (list var (Mval val state)) state)
+      (error 'gStateError "The variable was not declared."))))
+
+;check either boolean or integer
+(define Mval
+  (lambda (expr state)
+    (cond
+     [(boolexp? expr)   (Mbool expr state)]
+     [(intexp? expr)    (Minteger expr state)]
+     [else              (error 'gStateError "unknown operator.")])))
+  
 
 
 ; executes an if expression given a condition, an expression to execute if true, an expression to execute if false, and the state
@@ -191,9 +212,10 @@
 
 ; Finds the boolean value of an expression
 (define boolexp?
-  (lambda (expr)
+  (lambda (expr state)
     (cond
-      [(boolean? expr) expr]
+      [(boolean? expr) #t]
+      [(boolean? (getState expr state)) #t]
       [(eq? (operator expr) '&&) #t]
       [(eq? (operator expr) '||) #t]
       [(eq? (operator expr) '!)  #t]
@@ -209,6 +231,7 @@
 
 
 (provide removevar-cps)
+
  ; cps helper function for remove   
 (define removevar-cps
   (lambda (declared statevars statevals return)
@@ -230,6 +253,7 @@
     (list (cons (car declared) (vars state)) (cons (vals declared) (vals state)))))
 
 (provide StateUpdate)
+
 ; updates status given a declared variable
 (define StateUpdate
   (lambda (declared state)
@@ -249,4 +273,4 @@
   (lambda (expr)
     (M_statementlist expr '(() ()))))
 
-(run (parser "tests/test18.txt"))
+(run (parser "tests/test17.txt"))
