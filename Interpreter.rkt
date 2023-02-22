@@ -57,6 +57,48 @@
   (lambda (state)
     (car (cdr state))))
 
+
+;;;; ***************************************************
+; Auxiliary helper methods from class
+;;;; ***************************************************
+
+; tests if two expressions are not equal
+(define neq?
+  (lambda (expr1 expr2)
+    (not (eq? expr1 expr2))))
+
+; checks if a variable is in a list
+(define member?
+  (lambda (x list)
+    (cond
+      ((null? list) #f)
+      ((eq? x (car list)) #t)
+      (else (member? x (cdr list))))))
+
+; replaces a variable with a value in a list
+(define replace
+  (lambda (x y lis)
+    (cond
+      [(null? lis) '()]
+      [(eq? (car lis) x) (cons y (replace x y (cdr lis)))]
+      [else (cons (car lis) (replace x y (cdr lis)))])))
+
+; this is currently not being used?
+; removes a variable from a list
+(define remove
+  (lambda (var lis)
+    (cond 
+      [(null? lis) '()]
+      [(eq? (car lis) var) (cdr lis)]
+      [else (cons (car lis) (remove var (cdr lis)))])))
+
+; checks if a variable is declared
+(define declared?
+  (lambda (var state)
+    (member? var (vars state))))
+
+
+
 ;;;; ***************************************************
 ; Main functions to parse the statements
 ;;;; ***************************************************
@@ -66,7 +108,7 @@
   (lambda (expr state)
     (cond
       ((number? expr) expr)
-      ((not (list? expr))       (getState expr state))
+      ((not (list? expr))       (MgetState expr state))
       ((and (empty? (rightoperand expr)) (eq? (operator expr) '-)) (- 0  (Minteger (leftoperand expr) state)))
       ((eq? (operator expr) '+) (+         (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
       ((eq? (operator expr) '-) (-         (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
@@ -84,7 +126,7 @@
       [(boolean? expr)   expr]
       [(eq? 'true expr)    #t]
       [(eq? 'false expr)   #f]
-      ((not (list? expr))       (getState expr state))
+      ((not (list? expr))       (MgetState expr state))
       [(eq? (operator expr) '&&) (and      (Mbool    (leftoperand expr) state) (Mbool    (rightoperand expr) state))]
       [(eq? (operator expr) '||) (or       (Mbool    (leftoperand expr) state) (Mbool    (rightoperand expr) state))]
       [(eq? (operator expr) '!)  (not      (Mbool    (leftoperand expr) state))]
@@ -106,7 +148,7 @@
       [(or (null? (car state)) (null? (car (cdr state)))) (error 'gStateError "There was a problem finding that variable.")]
       [(and (eq? varName (car (vars state))) (eq? '$null$ (car (vals state))))   (error 'gStateError "This variable has not been assigned a value.")]
       [(eq? varName (car (vars state)))                                                           (car (cadr state))]
-      [(not (eq? varName (car (car state))))          (getState varName (list (cdr (car state)) (cdr (cadr state))))]
+      [(not (eq? varName (car (car state))))          (MgetState varName (list (cdr (car state)) (cdr (cadr state))))]
       [else                                        (error 'gStateError "There was a problem finding that variable.")]
     )
   )
@@ -142,8 +184,8 @@
 (define Mif
   (lambda (condition expr exprelse state)
     (cond
-      [(eq? (Mbool condition state) #t)     (StateUpdate (M_statement expr state) state)]
-      [(not(null? exprelse)) (StateUpdate (M_statement exprelse state) state)]
+      [(eq? (Mbool condition state) #t)     (StateUpdate (Mstatement expr state) state)]
+      [(not(null? exprelse)) (StateUpdate (Mstatement exprelse state) state)]
       [else state])))
 
 
@@ -151,15 +193,15 @@
 (define Mwhile
   (lambda (condition expr state)
     (cond
-      [(Mbool condition state) (M_while condition expr (StateUpdate (M_statement expr state) state))]
+      [(Mbool condition state) (Mwhile condition expr (StateUpdate (Mstatement expr state) state))]
       [else state])))
 
 (define Mreturn
   (lambda (expr state)
     (cond
-      [(eq? (M_statement expr state) #t)      (StateUpdate (list 'return "true") state)]
-      [(eq? (M_statement expr state) #f)     (StateUpdate (list 'return "false") state)]
-      [else                 (StateUpdate (list 'return (M_statement expr state)) state)])))
+      [(eq? (Mstatement expr state) #t)      (StateUpdate (list 'return "true") state)]
+      [(eq? (Mstatement expr state) #f)     (StateUpdate (list 'return "false") state)]
+      [else                 (StateUpdate (list 'return (Mstatement expr state)) state)])))
 
 
 ; determines the type of statement and executes its function
@@ -168,19 +210,19 @@
     (cond
       [(intexp? expr state)                                                       (Minteger expr state)]
       [(boolexp? expr state)                                                         (Mbool expr state)]
-      [(eq? (operator expr) 'return)                                    (M_return (operand expr) state)]
-      [(eq? (operator expr) 'var)              (M_declare (leftoperand expr) (rightoperand expr) state)]
-      [(eq? (operator expr) '=)                 (M_assign (leftoperand expr) (rightoperand expr) state)]
-      [(eq? (operator expr) 'if)     (M_if (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state)]
-      [(eq? (operator expr) 'while)              (M_while (leftoperand expr) (rightoperand expr) state)]
+      [(eq? (operator expr) 'return)                                    (Mreturn (operand expr) state)]
+      [(eq? (operator expr) 'var)              (Mdeclare (leftoperand expr) (rightoperand expr) state)]
+      [(eq? (operator expr) '=)                 (Massign (leftoperand expr) (rightoperand expr) state)]
+      [(eq? (operator expr) 'if)     (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state)]
+      [(eq? (operator expr) 'while)              (Mwhile (leftoperand expr) (rightoperand expr) state)]
       [else (error 'unknownop "Bad Statement")])))
 
 ; iterates across statement list executing expressions
-(define Mstatementlist
+(define MstatementList
   (lambda (expr state)
     (if (null? (cdr expr))
-        (getState 'return (M_statement (car expr) state))
-        (M_statementlist (cdr expr) (M_statement (car expr) state)))))
+        (MgetState 'return (Mstatement (car expr) state))
+        (MstatementList (cdr expr) (Mstatement (car expr) state)))))
 
 
 ; checks if a variable is initialized
@@ -223,7 +265,7 @@
   (lambda (expr state)
     (cond
       ((number? expr) #t)
-      ((and (declared? expr state) (number? (getState expr state))) #t)
+      ((and (declared? expr state) (number? (MgetState expr state))) #t)
       [(not (list? expr))       #f]
       ((eq? (operator expr) '+) #t)
       ((eq? (operator expr) '-) #t)
@@ -237,7 +279,7 @@
   (lambda (expr state)
     (cond
       [(boolean? expr) #t]
-      [(and (declared? expr state) (boolean? (getState expr state))) #t]
+      [(and (declared? expr state) (boolean? (MgetState expr state))) #t]
       [(not (list? expr))        #f]
       [(eq? (operator expr) '&&) #t]
       [(eq? (operator expr) '||) #t]
@@ -256,50 +298,15 @@
 ;;;; ***************************************************
 ; Main method
 ;;;; ***************************************************
+
+
+
 (define run
   (lambda (expr)
-    (M_statementlist expr '(() ()))))
+    (MstatementList expr '(() ()))))
 
-(run (parser "tests/test15.txt"))
-
-
+(run (parser "tests/test20.txt"))
 
 
-;;;; ***************************************************
-; Auxiliary helper methods from class
-;;;; ***************************************************
 
-; tests if two expressions are not equal
-(define neq?
-  (lambda (expr1 expr2)
-    (not (eq? expr1 expr2))))
 
-; checks if a variable is in a list
-(define member?
-  (lambda (x list)
-    (cond
-      ((null? list) #f)
-      ((eq? x (car list)) #t)
-      (else (member? x (cdr list))))))
-
-; replaces a variable with a value in a list
-(define replace
-  (lambda (x y lis)
-    (cond
-      [(null? lis) '()]
-      [(eq? (car lis) x) (cons y (replace x y (cdr lis)))]
-      [else (cons (car lis) (replace x y (cdr lis)))])))
-
-; this is currently not being used?
-; removes a variable from a list
-(define remove
-  (lambda (var lis)
-    (cond 
-      [(null? lis) '()]
-      [(eq? (car lis) var) (cdr lis)]
-      [else (cons (car lis) (remove var (cdr lis)))])))
-
-; checks if a variable is declared
-(define declared?
-  (lambda (var state)
-    (member? var (vars state))))
