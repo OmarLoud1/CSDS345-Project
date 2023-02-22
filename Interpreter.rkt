@@ -71,15 +71,15 @@
 (define Mbool
   (lambda (expr state)
     (cond
-      [(boolean? expr) expr]
-      [(eq? 'true expr) 'true]
-      [(eq? 'false expr) 'false]
+      [(boolean? expr)   expr]
+      [(eq? 'true expr)    #t]
+      [(eq? 'false expr)   #f]
       ((not (list? expr))       (getState expr state))
       [(eq? (operator expr) '&&) (and      (Mbool    (leftoperand expr) state) (Mbool    (rightoperand expr) state))]
       [(eq? (operator expr) '||) (or       (Mbool    (leftoperand expr) state) (Mbool    (rightoperand expr) state))]
       [(eq? (operator expr) '!)  (not      (Mbool    (leftoperand expr) state))]
-      [(eq? (operator expr) '==) (eq?      (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
-      [(eq? (operator expr) '!=) (neq?     (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
+      [(eq? (operator expr) '==) (eq?      (Mval (leftoperand expr) state)         (Mval (rightoperand expr) state))]
+      [(eq? (operator expr) '!=) (neq?     (Mval (leftoperand expr) state)         (Mval (rightoperand expr) state))]
       [(eq? (operator expr) '<)  (<        (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
       [(eq? (operator expr) '>)  (>        (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
       [(eq? (operator expr) '<=) (<=       (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
@@ -158,8 +158,8 @@
 (define Mval
   (lambda (expr state)
     (cond
-     [(boolexp? expr)   (Mbool expr state)]
-     [(intexp? expr)    (Minteger expr state)]
+     [(boolexp? expr state)   (Mbool expr state)]
+     [(intexp? expr state)    (Minteger expr state)]
      [else              (error 'gStateError "unknown operator.")])))
   
 
@@ -182,15 +182,18 @@
 
 (define M_return
   (lambda (expr state)
-    (StateUpdate (list 'return (M_statement expr state)) state)))
+    (cond
+      [(eq? (M_statement expr state) #t)      (StateUpdate (list 'return "true") state)]
+      [(eq? (M_statement expr state) #f)     (StateUpdate (list 'return "false") state)]
+      [else                 (StateUpdate (list 'return (M_statement expr state)) state)])))
 
 
 ; determines the type of statement and executes its function
 (define M_statement
   (lambda (expr state)
     (cond
-      [(intexp? expr)                                                             (Minteger expr state)]
-      [(boolexp? expr)                                                               (Mbool expr state)]
+      [(intexp? expr state)                                                       (Minteger expr state)]
+      [(boolexp? expr state)                                                         (Mbool expr state)]
       [(eq? (operator expr) 'return)                                    (M_return (operand expr) state)]
       [(eq? (operator expr) 'var)              (M_declare (leftoperand expr) (rightoperand expr) state)]
       [(eq? (operator expr) '=)                 (M_assign (leftoperand expr) (rightoperand expr) state)]
@@ -200,10 +203,11 @@
 
 
 (define intexp?
-  (lambda (expr)
+  (lambda (expr state)
     (cond
       ((number? expr) #t)
-      ((not (list? expr)) #t)
+      ((and (declared? expr state) (number? (getState expr state))) #t)
+      [(not (list? expr))       #f]
       ((eq? (operator expr) '+) #t)
       ((eq? (operator expr) '-) #t)
       ((eq? (operator expr) '*) #t)
@@ -216,7 +220,8 @@
   (lambda (expr state)
     (cond
       [(boolean? expr) #t]
-      [(boolean? (getState expr state)) #t]
+      [(and (declared? expr state) (boolean? (getState expr state))) #t]
+      [(not (list? expr))       #f]
       [(eq? (operator expr) '&&) #t]
       [(eq? (operator expr) '||) #t]
       [(eq? (operator expr) '!)  #t]
@@ -274,4 +279,4 @@
   (lambda (expr)
     (M_statementlist expr '(() ()))))
 
-(run (parser "tests/test17.txt"))
+(run (parser "tests/test15.txt"))
