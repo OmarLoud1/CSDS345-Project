@@ -196,6 +196,7 @@
       [(Mbool condition state) (Mwhile condition expr (StateUpdate (Mstatement expr state) state))]
       [else state])))
 
+;returns the value of the expression given
 (define Mreturn
   (lambda (expr state)
     (cond
