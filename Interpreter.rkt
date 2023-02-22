@@ -221,7 +221,7 @@
     (cond
       [(boolean? expr) #t]
       [(and (declared? expr state) (boolean? (getState expr state))) #t]
-      [(not (list? expr))       #f]
+      [(not (list? expr))        #f]
       [(eq? (operator expr) '&&) #t]
       [(eq? (operator expr) '||) #t]
       [(eq? (operator expr) '!)  #t]
