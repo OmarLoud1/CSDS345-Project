@@ -234,9 +234,12 @@
 (define addState
   (lambda (declared state)
     (cond
-      [(eq? (vals declared) "true")    (list (cons (vars declared) (vars state)) (cons #t (vals state)))]
-      [(eq? (vals declared) "false")   (list (cons (vars declared) (vars state)) (cons #f (vals state)))]
-      [else               (list (cons (vars declared) (vars state)) (cons (vals declared) (vals state)))])))
+      [(and (eq? (vals declared) "true") (neq? (vars declared) 'return))    (list (cons (vars declared) (vars state))
+                                                                                  (cons #t (vals state)))]
+      [(and (eq? (vals declared) "false") (neq? (vars declared) 'return))   (list (cons (vars declared) (vars state))
+                                                                                  (cons #f (vals state)))]
+      [else                                                    (list (cons (vars declared) (vars state))
+                                                                     (cons (vals declared) (vals state)))])))
 
 
 ; updates status given a declared variable
@@ -282,8 +285,8 @@
   (lambda (expr state)
     (cond
       [(boolean? expr)     #t]
-      [(eq? "true" expr)   #t]
-      [(eq? "false" expr)  #t]
+      [(eq? 'true expr)   #t]
+      [(eq? 'false expr)  #t]
       [(and (declared? expr state) (boolean? (MgetState expr state))) #t]
       [(not (list? expr))        #f]
       [(eq? (operator expr) '&&) #t]
