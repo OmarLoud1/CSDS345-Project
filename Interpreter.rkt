@@ -129,7 +129,7 @@
       ((not (list? expr))       (MgetState expr state))
       [(eq? (operator expr) '&&) (and      (Mbool    (leftoperand expr) state) (Mbool    (rightoperand expr) state))]
       [(eq? (operator expr) '||) (or       (Mbool    (leftoperand expr) state) (Mbool    (rightoperand expr) state))]
-      [(eq? (operator expr) '!)  (not      (Mbool    (leftoperand expr) state))]
+      [(eq? (operator expr) '!)  (not                                           (Mbool    (leftoperand expr) state))]
       [(eq? (operator expr) '==) (eq?      (Mval (leftoperand expr) state)         (Mval (rightoperand expr) state))]
       [(eq? (operator expr) '!=) (neq?     (Mval (leftoperand expr) state)         (Mval (rightoperand expr) state))]
       [(eq? (operator expr) '<)  (<        (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
@@ -148,7 +148,7 @@
       [(or (null? (vals state)) (null? (vars state)))                              (error 'gStateError "There was a problem finding that variable.")]
       [(and (eq? varName (car (vars state))) (eq? '$null$ (car (vals state))))   (error 'gStateError "This variable has not been assigned a value.")]
       [(eq? varName (car (vars state)))                                                                                           (car (vals state))]
-      [(not (eq? varName (car (vars state))))                                         (MgetState varName (list (cdr (vars state)) (cdr (vals state))))]
+      [(not (eq? varName (car (vars state))))                                       (MgetState varName (list (cdr (vars state)) (cdr (vals state))))]
       [else                                                                        (error 'gStateError "There was a problem finding that variable.")])))  
 
 
@@ -174,7 +174,7 @@
     (cond
      [(boolexp? expr state)                   (Mbool expr state)]
      [(intexp? expr state)                 (Minteger expr state)]
-     [else              (error 'gStateError "unknown operator.")])))
+     [else                  (error 'gStateError "Value Unknown")])))
   
 
 
@@ -184,7 +184,7 @@
     (cond
       [(eq? (Mbool condition state) #t)     (StateUpdate (Mstatement expr state) state)]
       [(not(null? exprelse))            (StateUpdate (Mstatement exprelse state) state)]
-      [else                                 state])))
+      [else                                                                       state])))
 
 
 ; executes a while loop given a condition, an expression to execute while true, and the state
@@ -214,7 +214,7 @@
       [(eq? (operator expr) '=)                 (Massign (leftoperand expr) (rightoperand expr) state)]
       [(eq? (operator expr) 'if)     (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state)]
       [(eq? (operator expr) 'while)              (Mwhile (leftoperand expr) (rightoperand expr) state)]
-      [else (error 'unknownop "Bad Statement")])))
+      [else                                                         (error 'unknownop "Bad Statement")])))
 
 ; iterates across statement list executing expressions
 (define MstatementList
@@ -285,8 +285,8 @@
   (lambda (expr state)
     (cond
       [(boolean? expr)     #t]
-      [(eq? 'true expr)   #t]
-      [(eq? 'false expr)  #t]
+      [(eq? 'true expr)    #t]
+      [(eq? 'false expr)   #t]
       [(and (declared? expr state) (boolean? (MgetState expr state))) #t]
       [(not (list? expr))        #f]
       [(eq? (operator expr) '&&) #t]
@@ -313,7 +313,7 @@
   (lambda (expr)
     (MstatementList expr '(() ()))))
 
-(run (parser "tests/testbool.txt"))
+(run (parser "tests/test20.txt"))
 
 
 
