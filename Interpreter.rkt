@@ -97,6 +97,10 @@
   (lambda (var state)
     (member? var (vars state))))
 
+(define sideeffect?
+  (lambda (expr)
+      (and (list? expr) (eq? (operator expr) '=))))
+
 
 
 ;;;; ***************************************************
@@ -115,6 +119,7 @@
       ((eq? (operator expr) '*) (*         (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
       ((eq? (operator expr) '/) (quotient  (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
       ((eq? (operator expr) '%) (remainder (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
+      [(eq? (operator expr) '=)            (MgetState (leftoperand expr) (Mstatement expr state))]
       (else (error 'unknownop "Bad Operator"))))) 
 
 
@@ -136,6 +141,7 @@
       [(eq? (operator expr) '>)  (>        (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
       [(eq? (operator expr) '<=) (<=       (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
       [(eq? (operator expr) '>=) (>=       (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
+      [(eq? (operator expr) '=)            (MgetState (leftoperand expr) (Mstatement expr state))]
 
 
       (else (error 'unknownop "Bad Operator")))))
@@ -155,26 +161,29 @@
 ; delares a variable
 (define Mdeclare
   (lambda (var val state)
-    (if (null? val)
-        (StateUpdate (list var '$null$) state)
-        (StateUpdate (list var (Mval val state)) state))))
+    (cond
+      [(null? val)                                                           (StateUpdate (list var '$null$) state)]
+      [(and (list? val) (eq? (operator val) '=))   (StateUpdate (list var (Mval val state)) (Mstatement val state))]
+      [else                                                         (StateUpdate (list var (Mval val state)) state)])))
 
 
 ; assigns a value to a variable
 (define Massign
   (lambda (var val state)
-    (if (declared? var state)
-      (StateUpdate (list var (Mval val state)) state)
-      (error 'gStateError "The variable was not declared."))))
+    (cond
+      [(and (declared? var state) (and (list? val) (eq? (operator val) '=))) (StateUpdate (list var (Mval val state)) (Mstatement val state))]
+      [(declared? var state)                                                                  (StateUpdate (list var (Mval val state)) state)]
+      [else                                                                             (error 'gStateError "The variable was not declared.")])))
 
 
 ;check either boolean or integer
 (define Mval
   (lambda (expr state)
     (cond
-     [(boolexp? expr state)                   (Mbool expr state)]
-     [(intexp? expr state)                 (Minteger expr state)]
-     [else              (error 'gStateError "unknown operator.")])))
+     [(boolexp? expr state)                                      (Mbool expr state)]
+     [(intexp? expr state)                                    (Minteger expr state)]
+     [(and (list? expr) (eq? (operator expr) '=))  (Mval (rightoperand expr) state)]
+     [else                                 (error 'gStateError "unknown operator.")])))
   
 
 
@@ -182,17 +191,23 @@
 (define Mif
   (lambda (condition expr exprelse state)
     (cond
-      [(eq? (Mbool condition state) #t)     (StateUpdate (Mstatement expr state) state)]
-      [(not(null? exprelse))            (StateUpdate (Mstatement exprelse state) state)]
-      [else                                 state])))
+      [(and (eq? (Mbool condition state) #t) (sideeffect? condition)) (StateUpdate (Mstatement expr state) (Mstatement condition state))]
+      [(eq? (Mbool condition state) #t)                                                      (StateUpdate (Mstatement expr state) state)]
+      [(and (not(null? exprelse)) (sideeffect? condition))        (StateUpdate (Mstatement exprelse state) (Mstatement condition state))]
+      [(not(null? exprelse))                                                             (StateUpdate (Mstatement exprelse state) state)]
+      [(sideeffect? condition)                                                                              (Mstatement condition state)]
+      [else                                                                                                                        state])))
 
 
 ; executes a while loop given a condition, an expression to execute while true, and the state
 (define Mwhile
   (lambda (condition expr state)
     (cond
+      [(and (Mbool condition state) (sideeffect? condition)) (Mwhile condition expr
+                                                                     (StateUpdate (Mstatement expr state) (Mstatement condition state)))]
       [(Mbool condition state) (Mwhile condition expr (StateUpdate (Mstatement expr state) state))]
-      [else                         state])))
+      [(sideeffect? condition)                                        (Mstatement condition state)]
+      [else                                                                                  state])))
 
 ;returns the value of the expression given
 (define Mreturn
@@ -313,7 +328,7 @@
   (lambda (expr)
     (MstatementList expr '(() ()))))
 
-(run (parser "tests/testbool.txt"))
+(run (parser "tests/test22.txt"))
 
 
 
