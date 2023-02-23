@@ -26,8 +26,8 @@
 (define operandn
   (lambda (n list)
     (cond
-     ((null? list) list)
-     ((zero? n) (car list))
+     ((null? list)                  list)
+     ((zero? n)               (car list))
      (else (operandn (- n 1) (cdr list))))))
 
 ;gets the left operand in prefix notation
@@ -71,25 +71,25 @@
 (define member?
   (lambda (x list)
     (cond
-      ((null? list) #f)
-      ((eq? x (car list)) #t)
+      ((null? list)             #f)
+      ((eq? x (car list))       #t)
       (else (member? x (cdr list))))))
 
 ; replaces a variable with a value in a list
 (define replace
   (lambda (x y lis)
     (cond
-      [(null? lis) '()]
-      [(eq? (car lis) x) (cons y (replace x y (cdr lis)))]
-      [else (cons (car lis) (replace x y (cdr lis)))])))
+      [(null? lis)                                       '()]
+      [(eq? (car lis) x)    (cons y (replace x y (cdr lis)))]
+      [else (cons (car lis)         (replace x y (cdr lis)))])))
 
 ; this is currently not being used?
 ; removes a variable from a list
 (define remove
   (lambda (var lis)
     (cond 
-      [(null? lis) '()]
-      [(eq? (car lis) var) (cdr lis)]
+      [(null? lis)                              '()]
+      [(eq? (car lis) var)                (cdr lis)]
       [else (cons (car lis) (remove var (cdr lis)))])))
 
 ; checks if a variable is declared
@@ -107,9 +107,9 @@
 (define Minteger
   (lambda (expr state)
     (cond
-      ((number? expr) expr)
-      ((not (list? expr))       (MgetState expr state))
-      ((and (empty? (rightoperand expr)) (eq? (operator expr) '-)) (- 0  (Minteger (leftoperand expr) state)))
+      ((number? expr)                                                                                           expr)
+      ((not (list? expr))                                                                     (MgetState expr state))
+      ((and (empty? (rightoperand expr)) (eq? (operator expr) '-))        (- 0  (Minteger (leftoperand expr) state)))
       ((eq? (operator expr) '+) (+         (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
       ((eq? (operator expr) '-) (-         (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
       ((eq? (operator expr) '*) (*         (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
@@ -123,9 +123,9 @@
 (define Mbool
   (lambda (expr state)
     (cond
-      [(boolean? expr)   expr]
-      [(eq? 'true expr)    #t]
-      [(eq? 'false expr)   #f]
+      [(boolean? expr)                            expr]
+      [(eq? 'true expr)                             #t]
+      [(eq? 'false expr)                            #f]
       ((not (list? expr))       (MgetState expr state))
       [(eq? (operator expr) '&&) (and      (Mbool    (leftoperand expr) state) (Mbool    (rightoperand expr) state))]
       [(eq? (operator expr) '||) (or       (Mbool    (leftoperand expr) state) (Mbool    (rightoperand expr) state))]
@@ -145,11 +145,11 @@
 (define MgetState
   (lambda (varName state)
     (cond
-      [(or (null? (car state)) (null? (car (cdr state)))) (error 'gStateError "There was a problem finding that variable.")]
+      [(or (null? (car state)) (null? (car (cdr state))))                          (error 'gStateError "There was a problem finding that variable.")]
       [(and (eq? varName (car (vars state))) (eq? '$null$ (car (vals state))))   (error 'gStateError "This variable has not been assigned a value.")]
-      [(eq? varName (car (vars state)))                                                           (car (cadr state))]
-      [(not (eq? varName (car (car state))))          (MgetState varName (list (cdr (car state)) (cdr (cadr state))))]
-      [else                                        (error 'gStateError "There was a problem finding that variable.")]
+      [(eq? varName (car (vars state)))                                                                                           (car (cadr state))]
+      [(not (eq? varName (car (car state))))                                         (MgetState varName (list (cdr (car state)) (cdr (cadr state))))]
+      [else                                                                        (error 'gStateError "There was a problem finding that variable.")]
     )
   )
 )  
@@ -174,8 +174,8 @@
 (define Mval
   (lambda (expr state)
     (cond
-     [(boolexp? expr state)   (Mbool expr state)]
-     [(intexp? expr state)    (Minteger expr state)]
+     [(boolexp? expr state)                   (Mbool expr state)]
+     [(intexp? expr state)                 (Minteger expr state)]
      [else              (error 'gStateError "unknown operator.")])))
   
 
@@ -185,8 +185,8 @@
   (lambda (condition expr exprelse state)
     (cond
       [(eq? (Mbool condition state) #t)     (StateUpdate (Mstatement expr state) state)]
-      [(not(null? exprelse)) (StateUpdate (Mstatement exprelse state) state)]
-      [else state])))
+      [(not(null? exprelse))            (StateUpdate (Mstatement exprelse state) state)]
+      [else                                 state])))
 
 
 ; executes a while loop given a condition, an expression to execute while true, and the state
@@ -194,7 +194,7 @@
   (lambda (condition expr state)
     (cond
       [(Mbool condition state) (Mwhile condition expr (StateUpdate (Mstatement expr state) state))]
-      [else state])))
+      [else                         state])))
 
 ;returns the value of the expression given
 (define Mreturn
@@ -242,9 +242,10 @@
 (define StateUpdate
   (lambda (declared state)
     (cond
-      [(or (null? declared) (null? (car declared))) state]
-      [(list? (vars declared)) (StateUpdate (list (car (vars declared)) (car (vals declared))) (StateUpdate (list (cdr (vars declared)) (cdr (vals declared))) state))]
-      [else (addState declared (removevar declared state))])))
+      [(or (null? declared)       (null? (car declared))) state]
+      [(list? (vars declared))    (StateUpdate (list (car (vars declared)) (car (vals declared)))
+                                               (StateUpdate (list (cdr (vars declared)) (cdr (vals declared))) state))]
+      [else                       (addState declared (removevar declared state))])))
 
  ; cps helper function for remove  
 (define removevar-cps
