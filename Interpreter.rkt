@@ -79,7 +79,7 @@
 (define replace
   (lambda (x y lis)
     (cond
-      [(null? lis)                                       '()]
+      [(null? lis)                                       lis]
       [(eq? (car lis) x)    (cons y (replace x y (cdr lis)))]
       [else (cons (car lis)         (replace x y (cdr lis)))])))
 
@@ -88,7 +88,7 @@
 (define remove
   (lambda (var lis)
     (cond 
-      [(null? lis)                              '()]
+      [(null? lis)                              lis]
       [(eq? (car lis) var)                (cdr lis)]
       [else (cons (car lis) (remove var (cdr lis)))])))
 
@@ -145,14 +145,11 @@
 (define MgetState
   (lambda (varName state)
     (cond
-      [(or (null? (car state)) (null? (car (cdr state))))                          (error 'gStateError "There was a problem finding that variable.")]
+      [(or (null? (vals state)) (null? (vars state)))                              (error 'gStateError "There was a problem finding that variable.")]
       [(and (eq? varName (car (vars state))) (eq? '$null$ (car (vals state))))   (error 'gStateError "This variable has not been assigned a value.")]
-      [(eq? varName (car (vars state)))                                                                                           (car (cadr state))]
-      [(not (eq? varName (car (car state))))                                         (MgetState varName (list (cdr (car state)) (cdr (cadr state))))]
-      [else                                                                        (error 'gStateError "There was a problem finding that variable.")]
-    )
-  )
-)  
+      [(eq? varName (car (vars state)))                                                                                           (car (vals state))]
+      [(not (eq? varName (car (vars state))))                                         (MgetState varName (list (cdr (vars state)) (cdr (vals state))))]
+      [else                                                                        (error 'gStateError "There was a problem finding that variable.")])))  
 
 
 ; delares a variable
@@ -169,6 +166,7 @@
     (if (declared? var state)
       (StateUpdate (list var (Mval val state)) state)
       (error 'gStateError "The variable was not declared."))))
+
 
 ;check either boolean or integer
 (define Mval
@@ -235,7 +233,10 @@
 ; adds the declared variable to the state, removes past instance of it
 (define addState
   (lambda (declared state)
-    (list (cons (car declared) (vars state)) (cons (vals declared) (vals state)))))
+    (cond
+      [(eq? (vals declared) "true")    (list (cons (vars declared) (vars state)) (cons #t (vals state)))]
+      [(eq? (vals declared) "false")   (list (cons (vars declared) (vars state)) (cons #f (vals state)))]
+      [else               (list (cons (vars declared) (vars state)) (cons (vals declared) (vals state)))])))
 
 
 ; updates status given a declared variable
@@ -251,7 +252,7 @@
 (define removevar-cps
   (lambda (declared statevars statevals return)
     (cond
-      [(null? statevars)                                                                        (return '() '())]
+      [(null? statevars)                                                            (return statevars statevals)]
       [(eq? (car statevars) (car declared))                             (return (cdr statevars) (cdr statevals))]
       [else (removevar-cps declared (cdr statevars) (cdr statevals) 
                                   (lambda (v1 v2) (return (cons (car statevars) v1) (cons (car statevals) v2))))])))
@@ -280,7 +281,9 @@
 (define boolexp?
   (lambda (expr state)
     (cond
-      [(boolean? expr) #t]
+      [(boolean? expr)     #t]
+      [(eq? "true" expr)   #t]
+      [(eq? "false" expr)  #t]
       [(and (declared? expr state) (boolean? (MgetState expr state))) #t]
       [(not (list? expr))        #f]
       [(eq? (operator expr) '&&) #t]
@@ -307,7 +310,7 @@
   (lambda (expr)
     (MstatementList expr '(() ()))))
 
-(run (parser "tests/test20.txt"))
+(run (parser "tests/testbool.txt"))
 
 
 

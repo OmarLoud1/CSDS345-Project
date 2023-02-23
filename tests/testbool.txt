@@ -1,0 +1,5 @@
+var x;
+x = true;
+var y = false;
+var z = x && y;
+return z;
