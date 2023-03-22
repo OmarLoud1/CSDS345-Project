@@ -198,13 +198,17 @@
       (lambda(break)
         (cond
           [(Mbool condition state) (Mwhile condition expr (StateUpdate (MstateList expr state return break 
-                                                          (lambda (env) (break (loop condition body env))) throw) state) return)]
-          [else                                                                     state])))))
+                                                          (lambda (env) (break (Mwhile condition body env))) throw) state) return)]
+          [else                                                                                                           state])))))
 
 
 (define Mbreak
   (lambda (state break)
     (break state)))
+
+(define Mcontinue
+  (lamda (state continue)
+    (continue state)))
 
 ;returns the value of the expression given
 (define Mreturn
@@ -227,6 +231,7 @@
       [(eq? (operator expr) 'if)     (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
       [(eq? (operator expr) 'while)              (Mwhile (leftoperand expr) (rightoperand expr) state return break continue throw)]
       [(eq? (operator expr) 'break)                                                       (Mbreak state break)]
+      [(eq? (operator expr) 'continue)                                              (Mcontinue state continue)]
       [else                                                                (error 'unknownop "Bad Statement")])))
 
 ; iterates across statement list executing expressions
