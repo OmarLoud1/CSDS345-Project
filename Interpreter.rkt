@@ -4,6 +4,7 @@
 ;;;; Project 1
 ;;;; ***************************************************
 
+
 ;Basic Interpreter
 #lang racket
 
@@ -11,6 +12,9 @@
 ;;;; ***************************************************
 ;Helper functions to parse the lists of expressions
 ;;;; ***************************************************
+
+(define newframe '(()()))
+(define newstate newframe)
 
 ;gets the operator in an expression
 (define operator
@@ -129,7 +133,7 @@
       ((not (list? expr))       (MgetState expr state))
       [(eq? (operator expr) '&&) (and      (Mbool    (leftoperand expr) state) (Mbool    (rightoperand expr) state))]
       [(eq? (operator expr) '||) (or       (Mbool    (leftoperand expr) state) (Mbool    (rightoperand expr) state))]
-      [(eq? (operator expr) '!)  (not                                           (Mbool    (leftoperand expr) state))]
+      [(eq? (operator expr) '!)  (not                                          (Mbool     (leftoperand expr) state))]
       [(eq? (operator expr) '==) (eq?      (Mval (leftoperand expr) state)         (Mval (rightoperand expr) state))]
       [(eq? (operator expr) '!=) (neq?     (Mval (leftoperand expr) state)         (Mval (rightoperand expr) state))]
       [(eq? (operator expr) '<)  (<        (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
@@ -198,30 +202,32 @@
 (define Mreturn
   (lambda (expr state)
     (cond
-      [(eq? (Mstate expr state) #t)      (StateUpdate (list 'return "true") state)]
-      [(eq? (Mstate expr state) #f)     (StateUpdate (list 'return "false") state)]
-      [else                 (StateUpdate (list 'return (Mstate expr state)) state)])))
+      [(eq? (Mstate expr state) #t)              (return "true")]
+      [(eq? (Mstate expr state) #f)              (return "false")]
+      [else                          (return (Mstate expr state))])))
 
 
 ; determines the type of statement and executes its function
 (define Mstate
-  (lambda (expr state)
+  (lambda (expr state break return throw continue)
     (cond
-      [(intexp? expr state)                                                       (Minteger expr state)]
-      [(boolexp? expr state)                                                         (Mbool expr state)]
+      [(intexp? expr state)                                                      (Minteger expr state)]
+      [(boolexp? expr state)                                                        (Mbool expr state)]
       [(eq? (operator expr) 'return)                                    (Mreturn (operand expr) state)]
       [(eq? (operator expr) 'var)              (Mdeclare (leftoperand expr) (rightoperand expr) state)]
       [(eq? (operator expr) '=)                 (Massign (leftoperand expr) (rightoperand expr) state)]
       [(eq? (operator expr) 'if)     (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state)]
       [(eq? (operator expr) 'while)              (Mwhile (leftoperand expr) (rightoperand expr) state)]
+      [(eq? (operator expr) 'break)                                                      (break state)]
+      [(eq? (operator expr) 'return)                             (Mreturn (operand expr) state return)]
       [else                                                         (error 'unknownop "Bad Statement")])))
 
 ; iterates across statement list executing expressions
 (define MstateList
-  (lambda (expr state)
-    (if (null? (cdr expr))
-        (MgetState 'return (Mstate (car expr) state))
-        (MstateList (cdr expr) (Mstate (car expr) state)))))
+  (lambda (expr-list state return)
+    (if (null? expr-list)
+        ('error "where da return D:")
+        (MstateList (cdr expr-list) (Mstate (car expr-list) state return) return))))
 
 
 ; checks if a variable is initialized
@@ -301,17 +307,20 @@
 
       (else #f))))
 
-
-
 ;;;; ***************************************************
+
+;;;; *̵͖̻͋̓͑͜*̸̫͔̽̾͐͜*̴̡̦͋͝͠*̵̢̼͛͊̕͜*̵̡̺͇̐̐͘*̵͓̫̦͋͝͝*̸͇̦͓̓͑̚*̴̦̪͓͘͘̕*̵͔͉͉͑́͝*̸͉̫̻͆͑͝*̵͔͚̐̀̈́*̸̦͓͇̽͊*̴͓̪͚̚̚͠*̸̙̻̘̾͐*̸̡̠̒͜͝͠*̵̟̘̼̾́̓*̵͕͍͎͆̚*̸͎̠̾̾͐*̸̠͓͔̈́̿͝*̵͖͍͉͝͝͝*̸̦͖̟̒͆͒*̵͎͙̫͋̔̓*̵̻͔̾̈́͜͠*̸̡͖̦͛̾͝*̸͕̦̠͐̿̈́*̸͎̙̓̕*̵͉̪̓̈́̕*̸̫̪̘̾͋*̸̠̦́͠*̴̡̞͉͋̀̕*̵̢̪̺́͐*̸͙͚̺̕͘͠*̵̻͕͍͆̔̕*̴̞̠͚̔̚*̴̦͙̠͐͋̀*̴͕͉̫̒̈́̿*̴̙̞̺͆͋̾*̵͕̝̒͋*̵̡͙͋͐̚*̵̞̞̻͑̽͒*̴̦͓͌͐͊*̸̺̪̈́̓͘*̵͚͚̙͆͌͒*̴̢͔͉͐͐͝*̸͇̙͊̀͘͜*̸̠͙͌͝͝*̸͎̦̈́̔͋*̵͇͍̻̓̈́͛*̴̟̪͐͜͠͝*̵̢͍̓͐̓͜*̵̞̪̿͛͑
 ; Main method
-;;;; ***************************************************
+;;;; *̵͖̻͋̓͑͜*̸̫͔̽̾͐͜*̴̡̦͋͝͠*̵̢̼͛͊̕͜*̵̡̺͇̐̐͘*̵͓̫̦͋͝͝*̸͇̦͓̓͑̚*̴̦̪͓͘͘̕*̵͔͉͉͑́͝*̸͉̫̻͆͑͝*̵͔͚̐̀̈́*̸̦͓͇̽͊*̴͓̪͚̚̚͠*̸̙̻̘̾͐*̸̡̠̒͜͝͠*̵̟̘̼̾́̓*̵͕͍͎͆̚*̸͎̠̾̾͐*̸̠͓͔̈́̿͝*̵͖͍͉͝͝͝*̸̦͖̟̒͆͒*̵͎͙̫͋̔̓*̵̻͔̾̈́͜͠*̸̡͖̦͛̾͝*̸͕̦̠͐̿̈́*̸͎̙̓̕*̵͉̪̓̈́̕*̸̫̪̘̾͋*̸̠̦́͠*̴̡̞͉͋̀̕*̵̢̪̺́͐*̸͙͚̺̕͘͠*̵̻͕͍͆̔̕*̴̞̠͚̔̚*̴̦͙̠͐͋̀*̴͕͉̫̒̈́̿*̴̙̞̺͆͋̾*̵͕̝̒͋*̵̡͙͋͐̚*̵̞̞̻͑̽͒*̴̦͓͌͐͊*̸̺̪̈́̓͘*̵͚͚̙͆͌͒*̴̢͔͉͐͐͝*̸͇̙͊̀͘͜*̸̠͙͌͝͝*̸͎̦̈́̔͋*̵͇͍̻̓̈́͛*̴̟̪͐͜͠͝*̵̢͍̓͐̓͜*̵̞̪̿͛͑
 
 
 
 (define interpret
   (lambda (expr)
-    (MstateList expr '(() ()))))
+    (call\cc
+      (lambda (return)
+        (MstateList expr (newstate) return)))))
+    
 
 (interpret (parser "tests/test20.txt"))
 
