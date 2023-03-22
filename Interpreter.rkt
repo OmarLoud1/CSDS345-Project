@@ -182,8 +182,8 @@
 (define Mif
   (lambda (condition expr exprelse state)
     (cond
-      [(eq? (Mbool condition state) #t)     (StateUpdate (Mstatement expr state) state)]
-      [(not(null? exprelse))            (StateUpdate (Mstatement exprelse state) state)]
+      [(eq? (Mbool condition state) #t)     (StateUpdate (Mstate expr state) state)]
+      [(not(null? exprelse))            (StateUpdate (Mstate exprelse state) state)]
       [else                                                                       state])))
 
 
@@ -191,20 +191,20 @@
 (define Mwhile
   (lambda (condition expr state)
     (cond
-      [(Mbool condition state) (Mwhile condition expr (StateUpdate (Mstatement expr state) state))]
+      [(Mbool condition state) (Mwhile condition expr (StateUpdate (Mstate expr state) state))]
       [else                         state])))
 
 ;returns the value of the expression given
 (define Mreturn
   (lambda (expr state)
     (cond
-      [(eq? (Mstatement expr state) #t)      (StateUpdate (list 'return "true") state)]
-      [(eq? (Mstatement expr state) #f)     (StateUpdate (list 'return "false") state)]
-      [else                 (StateUpdate (list 'return (Mstatement expr state)) state)])))
+      [(eq? (Mstate expr state) #t)      (StateUpdate (list 'return "true") state)]
+      [(eq? (Mstate expr state) #f)     (StateUpdate (list 'return "false") state)]
+      [else                 (StateUpdate (list 'return (Mstate expr state)) state)])))
 
 
 ; determines the type of statement and executes its function
-(define Mstatement
+(define Mstate
   (lambda (expr state)
     (cond
       [(intexp? expr state)                                                       (Minteger expr state)]
@@ -217,11 +217,11 @@
       [else                                                         (error 'unknownop "Bad Statement")])))
 
 ; iterates across statement list executing expressions
-(define MstatementList
+(define MstateList
   (lambda (expr state)
     (if (null? (cdr expr))
-        (MgetState 'return (Mstatement (car expr) state))
-        (MstatementList (cdr expr) (Mstatement (car expr) state)))))
+        (MgetState 'return (Mstate (car expr) state))
+        (MstateList (cdr expr) (Mstate (car expr) state)))))
 
 
 ; checks if a variable is initialized
@@ -309,11 +309,11 @@
 
 
 
-(define run
+(define interpret
   (lambda (expr)
-    (MstatementList expr '(() ()))))
+    (MstateList expr '(() ()))))
 
-(run (parser "tests/test20.txt"))
+(interpret (parser "tests/test20.txt"))
 
 
 
