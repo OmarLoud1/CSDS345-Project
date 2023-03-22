@@ -184,43 +184,41 @@
 
 ; executes an if expression given a condition, an expression to execute if true, an expression to execute if false, and the state
 (define Mif
-  (lambda (condition expr exprelse state)
+  (lambda (condition expr exprelse state return)
     (cond
-      [(eq? (Mbool condition state) #t)     (StateUpdate (Mstate expr state) state)]
-      [(not(null? exprelse))            (StateUpdate (Mstate exprelse state) state)]
+      [(eq? (Mbool condition state) #t)     (StateUpdate (Mstate expr state return) state)]
+      [(not(null? exprelse))            (StateUpdate (Mstate exprelse state return) state)]
       [else                                                                       state])))
 
 
 ; executes a while loop given a condition, an expression to execute while true, and the state
 (define Mwhile
-  (lambda (condition expr state)
+  (lambda (condition expr state return)
     (cond
-      [(Mbool condition state) (Mwhile condition expr (StateUpdate (Mstate expr state) state))]
+      [(Mbool condition state) (Mwhile condition expr (StateUpdate (Mstate expr state return) state) return)]
       [else                         state])))
 
 ;returns the value of the expression given
 (define Mreturn
-  (lambda (expr state)
+  (lambda (expr state return)
     (cond
-      [(eq? (Mstate expr state) #t)              (return "true")]
-      [(eq? (Mstate expr state) #f)              (return "false")]
-      [else                          (return (Mstate expr state))])))
+      [(eq? (Mstate expr state return) #t)              (return "true")]
+      [(eq? (Mstate expr state return) #f)              (return "false")]
+      [else                          (return (Mstate expr state return))])))
 
 
 ; determines the type of statement and executes its function
 (define Mstate
-  (lambda (expr state break return throw continue)
+  (lambda (expr state return)
     (cond
-      [(intexp? expr state)                                                      (Minteger expr state)]
-      [(boolexp? expr state)                                                        (Mbool expr state)]
-      [(eq? (operator expr) 'return)                                    (Mreturn (operand expr) state)]
-      [(eq? (operator expr) 'var)              (Mdeclare (leftoperand expr) (rightoperand expr) state)]
-      [(eq? (operator expr) '=)                 (Massign (leftoperand expr) (rightoperand expr) state)]
-      [(eq? (operator expr) 'if)     (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state)]
-      [(eq? (operator expr) 'while)              (Mwhile (leftoperand expr) (rightoperand expr) state)]
-      [(eq? (operator expr) 'break)                                                      (break state)]
-      [(eq? (operator expr) 'return)                             (Mreturn (operand expr) state return)]
-      [else                                                         (error 'unknownop "Bad Statement")])))
+      [(intexp? expr state)                                                             (Minteger expr state)]
+      [(boolexp? expr state)                                                               (Mbool expr state)]
+      [(eq? (operator expr) 'return)                                    (Mreturn (operand expr) state return)]
+      [(eq? (operator expr) 'var)                     (Mdeclare (leftoperand expr) (rightoperand expr) state)]
+      [(eq? (operator expr) '=)                        (Massign (leftoperand expr) (rightoperand expr) state)]
+      [(eq? (operator expr) 'if)     (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return)]
+      [(eq? (operator expr) 'while)              (Mwhile (leftoperand expr) (rightoperand expr) state return)]
+      [else                                                                (error 'unknownop "Bad Statement")])))
 
 ; iterates across statement list executing expressions
 (define MstateList
@@ -310,19 +308,24 @@
 ;;;; ***************************************************
 
 ;;;; *̵͖̻͋̓͑͜*̸̫͔̽̾͐͜*̴̡̦͋͝͠*̵̢̼͛͊̕͜*̵̡̺͇̐̐͘*̵͓̫̦͋͝͝*̸͇̦͓̓͑̚*̴̦̪͓͘͘̕*̵͔͉͉͑́͝*̸͉̫̻͆͑͝*̵͔͚̐̀̈́*̸̦͓͇̽͊*̴͓̪͚̚̚͠*̸̙̻̘̾͐*̸̡̠̒͜͝͠*̵̟̘̼̾́̓*̵͕͍͎͆̚*̸͎̠̾̾͐*̸̠͓͔̈́̿͝*̵͖͍͉͝͝͝*̸̦͖̟̒͆͒*̵͎͙̫͋̔̓*̵̻͔̾̈́͜͠*̸̡͖̦͛̾͝*̸͕̦̠͐̿̈́*̸͎̙̓̕*̵͉̪̓̈́̕*̸̫̪̘̾͋*̸̠̦́͠*̴̡̞͉͋̀̕*̵̢̪̺́͐*̸͙͚̺̕͘͠*̵̻͕͍͆̔̕*̴̞̠͚̔̚*̴̦͙̠͐͋̀*̴͕͉̫̒̈́̿*̴̙̞̺͆͋̾*̵͕̝̒͋*̵̡͙͋͐̚*̵̞̞̻͑̽͒*̴̦͓͌͐͊*̸̺̪̈́̓͘*̵͚͚̙͆͌͒*̴̢͔͉͐͐͝*̸͇̙͊̀͘͜*̸̠͙͌͝͝*̸͎̦̈́̔͋*̵͇͍̻̓̈́͛*̴̟̪͐͜͠͝*̵̢͍̓͐̓͜*̵̞̪̿͛͑
+
 ; Main method
+
 ;;;; *̵͖̻͋̓͑͜*̸̫͔̽̾͐͜*̴̡̦͋͝͠*̵̢̼͛͊̕͜*̵̡̺͇̐̐͘*̵͓̫̦͋͝͝*̸͇̦͓̓͑̚*̴̦̪͓͘͘̕*̵͔͉͉͑́͝*̸͉̫̻͆͑͝*̵͔͚̐̀̈́*̸̦͓͇̽͊*̴͓̪͚̚̚͠*̸̙̻̘̾͐*̸̡̠̒͜͝͠*̵̟̘̼̾́̓*̵͕͍͎͆̚*̸͎̠̾̾͐*̸̠͓͔̈́̿͝*̵͖͍͉͝͝͝*̸̦͖̟̒͆͒*̵͎͙̫͋̔̓*̵̻͔̾̈́͜͠*̸̡͖̦͛̾͝*̸͕̦̠͐̿̈́*̸͎̙̓̕*̵͉̪̓̈́̕*̸̫̪̘̾͋*̸̠̦́͠*̴̡̞͉͋̀̕*̵̢̪̺́͐*̸͙͚̺̕͘͠*̵̻͕͍͆̔̕*̴̞̠͚̔̚*̴̦͙̠͐͋̀*̴͕͉̫̒̈́̿*̴̙̞̺͆͋̾*̵͕̝̒͋*̵̡͙͋͐̚*̵̞̞̻͑̽͒*̴̦͓͌͐͊*̸̺̪̈́̓͘*̵͚͚̙͆͌͒*̴̢͔͉͐͐͝*̸͇̙͊̀͘͜*̸̠͙͌͝͝*̸͎̦̈́̔͋*̵͇͍̻̓̈́͛*̴̟̪͐͜͠͝*̵̢͍̓͐̓͜*̵̞̪̿͛͑
 
 
 
 (define interpret
   (lambda (expr)
-    (call\cc
+    (call/cc
       (lambda (return)
-        (MstateList expr (newstate) return)))))
+        (MstateList expr newstate return
+                    (error 'unknownop "No loop to break out of"
+                    (error 'unknownop "No loop to continue"
+                           throw)))))
     
 
-(interpret (parser "tests/test20.txt"))
+(interpret (parser "tests/test18.txt"))
 
 
 
