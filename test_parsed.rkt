@@ -2,4 +2,4 @@
 
 (require "simpleParser.rkt")
 
-(parser "tests/test21.txt")
+(parser "tests/test1.txt")

@@ -21,6 +21,10 @@
   (lambda (list)
     (car list)))
 
+(define args
+  (lambda (list)
+    (cdr list)))
+
 ;gets the operand in an expression
 (define operand
   (lambda (list)
@@ -186,7 +190,7 @@
 (define Mif
   (lambda (condition expr exprelse state return break continue throw)
     (cond
-      [(eq? (Mbool condition state) #t)     (StateUpdate (MstateList expr state return break continue throw) state)]
+      [(eq? (Mbool condition state) #t)     (StateUpdate (Mstate expr state return break continue throw) state)]
       [(not(null? exprelse))            (StateUpdate (MstateList exprelse state return break continue throw) state)]
       [else                                                                       state])))
 
@@ -197,8 +201,8 @@
     (call/cc
       (lambda(break)
         (cond
-          [(Mbool condition state) (Mwhile condition expr (StateUpdate (MstateList expr state return break 
-                                                          (lambda (env) (break (Mwhile condition body env))) throw) state) return)]
+          [(Mbool condition state) (Mwhile condition expr (Mstate expr state return break 
+                                                          (lambda (env) (break (Mwhile condition state env return throw))) throw) return throw)]
           [else                                                                                                           state])))))
 
 
@@ -207,38 +211,39 @@
     (break state)))
 
 (define Mcontinue
-  (lamda (state continue)
+  (lambda (state continue)
     (continue state)))
 
 ;returns the value of the expression given
 (define Mreturn
-  (lambda (expr state return)
+  (lambda (expr state return break continue throw)
     (cond
-      [(eq? (Mstate expr state return) #t)              (return "true")]
-      [(eq? (Mstate expr state return) #f)              (return "false")]
-      [else                          (return (Mstate expr state return))])))
+      [(eq? (Mstate expr state return break continue throw) #t)               (return "true")]
+      [(eq? (Mstate expr state return break continue throw) #f)              (return "false")]
+      [else                          (return (Mstate expr state return break continue throw))])))
 
 
 ; determines the type of statement and executes its function
 (define Mstate
-  (lambda (expr state return break continue)
+  (lambda (expr state return break continue throw)
     (cond
-      [(intexp? expr state)                                                             (Minteger expr state)]
-      [(boolexp? expr state)                                                               (Mbool expr state)]
-      [(eq? (operator expr) 'return)                                    (Mreturn (operand expr) state return)]
-      [(eq? (operator expr) 'var)                     (Mdeclare (leftoperand expr) (rightoperand expr) state)]
-      [(eq? (operator expr) '=)                        (Massign (leftoperand expr) (rightoperand expr) state)]
+      [(intexp? expr state)                                                                                  (Minteger expr state)]
+      [(boolexp? expr state)                                                                                    (Mbool expr state)]
+      [(eq? (operator expr) 'return)                                    (Mreturn (operand expr) state return break continue throw)]
+      [(eq? (operator expr) 'var)                                          (Mdeclare (leftoperand expr) (rightoperand expr) state)]
+      [(eq? (operator expr) '=)                                             (Massign (leftoperand expr) (rightoperand expr) state)]
       [(eq? (operator expr) 'if)     (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
-      [(eq? (operator expr) 'while)              (Mwhile (leftoperand expr) (rightoperand expr) state return break continue throw)]
-      [(eq? (operator expr) 'break)                                                       (Mbreak state break)]
-      [(eq? (operator expr) 'continue)                                              (Mcontinue state continue)]
-      [else                                                                (error 'unknownop "Bad Statement")])))
+      [(eq? (operator expr) 'while)                             (Mwhile (leftoperand expr) (rightoperand expr) state return throw)]
+      [(eq? (operator expr) 'break)                                                                           (Mbreak state break)]
+      [(eq? (operator expr) 'continue)                                                                  (Mcontinue state continue)]
+      [(eq? (operator expr) 'begin)                                     (MstateList (args expr) state return break continue throw)]
+      [else                                                                                     (error 'unknownop "Bad Statement")])))
 
 ; iterates across statement list executing expressions
 (define MstateList
   (lambda (expr-list state return break continue throw)
     (if (null? expr-list)
-        ('error "where da return D:")
+        state
         (MstateList (cdr expr-list) (Mstate (car expr-list) state return break continue throw) 
                                                                      return break continue throw))))
 
@@ -340,7 +345,7 @@
                     (lambda (state) (error 'unknownop "Uncaught exception thrown")))))))
     
 
-(interpret (parser "tests/test18.txt"))
+(interpret (parser "tests/test1.txt"))
 
 
 
