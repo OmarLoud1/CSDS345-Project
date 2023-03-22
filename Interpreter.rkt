@@ -184,19 +184,21 @@
 
 ; executes an if expression given a condition, an expression to execute if true, an expression to execute if false, and the state
 (define Mif
-  (lambda (condition expr exprelse state return)
+  (lambda (condition expr exprelse state return break continue throw)
     (cond
-      [(eq? (Mbool condition state) #t)     (StateUpdate (Mstate expr state return) state)]
-      [(not(null? exprelse))            (StateUpdate (Mstate exprelse state return) state)]
+      [(eq? (Mbool condition state) #t)     (StateUpdate (MstateList expr state return break continue throw) state)]
+      [(not(null? exprelse))            (StateUpdate (MstateList exprelse state return break continue throw) state)]
       [else                                                                       state])))
 
 
 ; executes a while loop given a condition, an expression to execute while true, and the state
 (define Mwhile
-  (lambda (condition expr state return)
-    (cond
-      [(Mbool condition state) (Mwhile condition expr (StateUpdate (Mstate expr state return) state) return)]
-      [else                         state])))
+  (lambda (condition expr state return throw)
+    (call/cc
+      (lambda(break)
+        (cond
+          [(Mbool condition state) (Mwhile condition expr (StateUpdate (MstateList expr state return break (lambda (env) (break (loop condition body env))) throw) state) return)]
+          [else                         state])))))
 
 ;returns the value of the expression given
 (define Mreturn
@@ -209,23 +211,24 @@
 
 ; determines the type of statement and executes its function
 (define Mstate
-  (lambda (expr state return)
+  (lambda (expr state return break continue)
     (cond
       [(intexp? expr state)                                                             (Minteger expr state)]
       [(boolexp? expr state)                                                               (Mbool expr state)]
       [(eq? (operator expr) 'return)                                    (Mreturn (operand expr) state return)]
       [(eq? (operator expr) 'var)                     (Mdeclare (leftoperand expr) (rightoperand expr) state)]
       [(eq? (operator expr) '=)                        (Massign (leftoperand expr) (rightoperand expr) state)]
-      [(eq? (operator expr) 'if)     (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return)]
-      [(eq? (operator expr) 'while)              (Mwhile (leftoperand expr) (rightoperand expr) state return)]
+      [(eq? (operator expr) 'if)     (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
+      [(eq? (operator expr) 'while)              (Mwhile (leftoperand expr) (rightoperand expr) state return break continue throw)]
       [else                                                                (error 'unknownop "Bad Statement")])))
 
 ; iterates across statement list executing expressions
 (define MstateList
-  (lambda (expr-list state return)
+  (lambda (expr-list state return break continue throw)
     (if (null? expr-list)
         ('error "where da return D:")
-        (MstateList (cdr expr-list) (Mstate (car expr-list) state return) return))))
+        (MstateList (cdr expr-list) (Mstate (car expr-list) state return break continue throw) 
+                                                                     return break continue throw))))
 
 
 ; checks if a variable is initialized
@@ -320,9 +323,9 @@
     (call/cc
       (lambda (return)
         (MstateList expr newstate return
-                    (error 'unknownop "No loop to break out of"
-                    (error 'unknownop "No loop to continue"
-                           throw)))))
+                    (lambda (state) (error 'unknownop "No loop to break out of"))
+                    (lambda (state) (error 'unknownop "No loop to continue"))
+                    (lambda (state) (error 'unknownop "Uncaught exception thrown")))))))
     
 
 (interpret (parser "tests/test18.txt"))
