@@ -115,7 +115,7 @@
 ; checks if a variable is declared
 (define declared?
   (lambda (var state)
-    (member? var (stateVars state))))
+    (member? var (vars state))))
 
 
 
@@ -128,7 +128,6 @@
   (lambda (expr state)
     (cond
       ((number? expr)                                                                                           expr)
-      ((box? expr)                                                                                              (unbox expr))
       ((not (list? expr))                                                                     (MgetState expr state))
       ((and (empty? (rightoperand expr)) (eq? (operator expr) '-))        (- 0  (Minteger (leftoperand expr) state)))
       ((eq? (operator expr) '+) (+         (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
@@ -166,10 +165,10 @@
 (define MgetState
   (lambda (varName state)
     (cond
-      [(or (null? (stateVals state)) (null? (stateVars state)))                              (error 'gStateError "There was a problem finding that variable.")]
-      [(and (eq? varName (car (stateVars state))) (eq? '$null$ (car (stateVals state))))   (error 'gStateError "This variable has not been assigned a value.")]
-      [(eq? varName (car (stateVars state)))                                                                                           (car (stateVals state))]
-      [(not (eq? varName (car (stateVars state))))                                       (MgetState varName (list (cdr (stateVars state)) (cdr (stateVals state))))]
+      [(or (null? (vals state)) (null? (vars state)))                              (error 'gStateError "There was a problem finding that variable.")]
+      [(and (eq? varName (car (vars state))) (eq? '$null$ (car (vals state))))   (error 'gStateError "This variable has not been assigned a value.")]
+      [(eq? varName (car (vars state)))                                                                                           (car (vals state))]
+      [(not (eq? varName (car (vars state))))                                       (MgetState varName (list (cdr (vars state)) (cdr (vals state))))]
       [else                                                                        (error 'gStateError "There was a problem finding that variable.")])))  
 
 
@@ -178,7 +177,7 @@
   (lambda (var val state)
     (if (null? val)
         (StateUpdate (list var '$null$) state)
-        (StateUpdate (list var (Mval (box val) state)) state))))
+        (StateUpdate (list var (Mval val state)) state))))
 
 
 ; assigns a value to a variable
@@ -215,7 +214,7 @@
       (lambda(break)
         (cond
           [(Mbool condition state) (Mwhile condition expr (Mstate expr state return break 
-                                                          (lambda (env) (break (Mwhile condition expr env return throw))) throw) return throw)]
+                                                          (lambda (env) (break (Mwhile condition state env return throw))) throw) return throw)]
           [else                                                                                                           state])))))
 
 
@@ -323,7 +322,6 @@
   (lambda (expr state)
     (cond
       ((number? expr) #t)
-      ((and (box? expr) (number? (unbox expr))) #t)
       ((and (declared? expr state) (number? (MgetState expr state))) #t)
       [(not (list? expr))       #f]
       ((eq? (operator expr) '+) #t)
@@ -374,7 +372,7 @@
                     (lambda (state) (error 'unknownop "Uncaught exception thrown")))))))
     
 
-(interpret (parser "tests/test3.txt"))
+(interpret (parser "tests/test1.txt"))
 
 
 
