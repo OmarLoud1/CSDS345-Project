@@ -308,7 +308,7 @@
 (define Mwhile
   (lambda (condition expr state return throw)
     (call/cc
-      (lambda(break)
+      (lambda (break)
         (cond  
                               [(Mbool condition state) (Mwhile condition expr (Mstate expr state return break 
                                                         (lambda (state2) (break (Mwhile condition expr state2 return throw))) throw) return throw)]
@@ -326,15 +326,15 @@
                                       (lambda (v) (begin (Mstate (finally-into-block finally) state return break continue throw) (return v)))
                                       (lambda (state2) (break (Mstate (finally-into-block finally) state2 return break continue throw)))
                                       (lambda (state2) (continue (Mstate (finally-into-block finally) state2 return break continue throw)))
-                                      (except-continuation except finally state return break continue throw jump (finally-into-block finally)))
+                                      (except-continuation except finally state return break continue throw jump))
                           return break continue throw)))))
 
 ; creates the exception continuation for Mtry
 (define except-continuation
-  (lambda (except finally state return break continue throw jump finally-block)
+  (lambda (except finally state return break continue throw jump)
     (cond
       ((null? except)
-             (lambda (exception state2) (throw exception (Mbegin finally-block state2 return break continue throw)))) 
+             (lambda (exception state2) (throw exception (Mstate (finally-into-block finally) state2 return break continue throw)))) 
       ((not (eq? 'catch (operator except)))
              (error "Incorrect catch statement"))
       (else
@@ -535,6 +535,7 @@
 
 (run-tests 41)
 
+; (interpret (parser "tests2/test37.txt"))
 
 
 
