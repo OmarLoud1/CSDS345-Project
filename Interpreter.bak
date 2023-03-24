@@ -13,14 +13,8 @@
 ;Helper functions to parse the lists of expressions
 ;;;; ***************************************************
 
-
-(define newframe
-  (lambda ()
-    '(()())))
-
-(define newstate
-  (lambda ()
-    (list (newframe))))
+(define newframe '(()()))
+(define newstate (list newframe))
 
 ;gets the operator in an expression
 (define operator
@@ -121,16 +115,7 @@
 ; checks if a variable is declared
 (define declared?
   (lambda (var state)
-    (member? var (stateVars state))))
-
-
-
-(define contains?
-  (lambda (x list)
-    (cond
-      ((null? list) #f)
-      ((eq? x (car list)) #t)
-      (else contains? x (cdr list)))))
+    (member? var (vars state))))
 
 
 
@@ -143,7 +128,6 @@
   (lambda (expr state)
     (cond
       ((number? expr)                                                                                           expr)
-      ((box? expr)                                                                                      (unbox expr))
       ((not (list? expr))                                                                     (MgetState expr state))
       ((and (empty? (rightoperand expr)) (eq? (operator expr) '-))        (- 0  (Minteger (leftoperand expr) state)))
       ((eq? (operator expr) '+) (+         (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
@@ -176,22 +160,15 @@
 
       (else (error 'unknownop "Bad Operator")))))
 
+
+; Gets the value of a variable
 (define MgetState
   (lambda (varName state)
     (cond
-      [(null? state)         (error 'gStateError "The variable has not been declared.")]
-      [(contains? varName (stateVars state))     (MgetState_helper varName (car state))]
-      [else                                             (MgetState varName (cdr state))])))
-
-
-; Gets the value of a variable
-(define MgetState_helper
-  (lambda (varName layer)
-    (cond
-      [(or (null? (vals layer)) (null? (vars layer)))                              (error 'gStateError "There was a problem finding that variable.")]
-      [(and (eq? varName (car (vars layer))) (eq? '$null$ (car (vals layer))))   (error 'gStateError "This variable has not been assigned a value.")]
-      [(eq? varName (car (vars layer)))                                                                                  (unbox (car (vals layer)))]
-      [(not (eq? varName (car (vars layer))))                                       (MgetState varName (list (cdr (vars layer)) (cdr (vals layer))))]
+      [(or (null? (vals state)) (null? (vars state)))                              (error 'gStateError "There was a problem finding that variable.")]
+      [(and (eq? varName (car (vars state))) (eq? '$null$ (car (vals state))))   (error 'gStateError "This variable has not been assigned a value.")]
+      [(eq? varName (car (vars state)))                                                                                           (car (vals state))]
+      [(not (eq? varName (car (vars state))))                                       (MgetState varName (list (cdr (vars state)) (cdr (vals state))))]
       [else                                                                        (error 'gStateError "There was a problem finding that variable.")])))  
 
 
@@ -200,7 +177,7 @@
   (lambda (var val state)
     (if (null? val)
         (StateUpdate (list var '$null$) state)
-        (StateUpdate (list var (Mval (box val) state)) state))))
+        (StateUpdate (list var (Mval val state)) state))))
 
 
 ; assigns a value to a variable
@@ -237,60 +214,9 @@
       (lambda(break)
         (cond
           [(Mbool condition state) (Mwhile condition expr (Mstate expr state return break 
-                                                          (lambda (env) (break (Mwhile condition expr env return throw))) throw) return throw)]
+                                                          (lambda (env) (break (Mwhile condition state env return throw))) throw) return throw)]
           [else                                                                                                           state])))))
 
-
-(define Mtry
-  (lambda (try except finally environment return break continue throw)
-    (call/cc
-     (lambda (jump)
-         (MstateList (finally-into-block finally)
-                          (MstateList (try-into-block try)
-                                      state
-                                      (lambda (v) (begin (Mstatelist (finally-into-block finally) state return break continue throw) (return v)))
-                                      (lambda (env) (break (MstateList (finally-into-block finally) env return break continue throw compile-type)))
-                                      (lambda (env) (continue (MstateList finally-block env return break continue throw compile-type)))
-                                      (except-continuation except state return break continue throw jump (finally-into-block finally))))
-                          return break continue throw))))
-
-(define except-continuation
-  (lambda (except environment return break continue throw jump finally-block)
-    (cond
-      ((null? catch-statement)
-             (lambda (ex env) (throw ex (Mstatelist finally-block env return break continue throw)))) 
-      ((not (eq? 'catch (operator catch-statement)))
-             (myerror "Incorrect catch statement"))
-      (else
-             (lambda (ex env) (jump (Mblock finally-block
-                                     (pop-frame (Mstatelist
-                                                 (body except)
-                                                 (MaddState (catch-var catch-statement) ex (push-frame environment))
-                                                 return 
-                                                 (lambda (env2) (break (pop-frame env2))) 
-                                                 (lambda (env2) (continue (pop-frame env2))) 
-                                                 (lambda (v env2) (throw v (pop-frame env2)))))
-                                     return break continue throw)))))))
-
-(define body
-  (lambda (statement)
-    (caddr statement)))
-
-(define statement-into-block
-  (lambda (statement)
-    (cons 'begin statement)))
-
-(define try-into-block
-  (lambda (try)
-    (statement-into-block try)))
-
-(define except-into-block
-  (lambda (except)
-    (statement-into-block except)))
-
-(define finally-into-block
-  (lambda (finally)
-    (statement-into-block finally)))
 
 (define Mbreak
   (lambda (state break)
@@ -317,52 +243,13 @@
       [(boolexp? expr state)                                                                                    (Mbool expr state)]
       [(eq? (operator expr) 'return)                                    (Mreturn (operand expr) state return break continue throw)]
       [(eq? (operator expr) 'var)                                          (Mdeclare (leftoperand expr) (rightoperand expr) state)]
-      [(eq? (operator expr) '=)                                             (Mupdate (leftoperand expr) (rightoperand expr) state)]
+      [(eq? (operator expr) '=)                                             (Massign (leftoperand expr) (rightoperand expr) state)]
       [(eq? (operator expr) 'if)     (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
       [(eq? (operator expr) 'while)                             (Mwhile (leftoperand expr) (rightoperand expr) state return throw)]
       [(eq? (operator expr) 'break)                                                                           (Mbreak state break)]
       [(eq? (operator expr) 'continue)                                                                  (Mcontinue state continue)]
-      [(eq? (operator expr) 'begin)                                         (Mbegin (args expr) state return break continue throw)]
+      [(eq? (operator expr) 'begin)                                     (MstateList (args expr) state return break continue throw)]
       [else                                                                                     (error 'unknownop "Bad Statement")])))
-
-(define Mupdate
-  (lambda (varName val state)
-    (cond
-      [(intexp? val state)  (Mupdate_helper varName (Minteger val state) state)]
-      [(boolexp? val state)    (Mupdate_helper varName (Mbool val state) state)]
-      [else                         (error "Variable not interpretable")])))
-      
-
-(define Mupdate_helper
-  (lambda (varName val state)
-    (cond
-      [(null? state)                                              (error 'gStateError "The variable has not been declared.")]
-      [(contains? varName (stateVars state))  (cons (begin (Mupdate_layer varName val (car state)) (car state)) (cdr state))]
-      [else                                                      (cons (car state) (Mupdate_helper varName val (cdr state)))])))
-
-; Gets the value of a variable
-(define Mupdate_layer
-  (lambda (varName val layer)
-    (cond
-      [(or (null? (vals layer)) (null? (vars layer)))                              (error 'gStateError "There was a problem finding that variable.")]
-      [(and (eq? varName (car (vars layer))) (eq? '$null$ (car (vals layer))))   (error 'gStateError "This variable has not been assigned a value.")]
-      [(eq? varName (car (vars layer)))                                                                             (set-box (car (vals layer)) val)]
-      [(not (eq? varName (car (vars layer))))                                  (Mupdate_layer varName (list (cdr (vars layer)) (cdr (vals layer))))]
-      [else                                                                        (error 'gStateError "There was a problem finding that variable.")])))  
-
-
-
-(define set-box
-  (lambda (box val)
-    (begin (set-box! box val) box)))
-
-
-(define Mbegin
-  (lambda (expr-list state return break continue throw)
-    (popFrame (MstateList expr-list (addFrame state) return
-                                         (lambda (state1) (break (popFrame state1)))
-                                         (lambda (state1) (continue (popFrame state1)))
-                                         (lambda (state1) (throw (popFrame state1)))))))
 
 ; iterates across statement list executing expressions
 (define MstateList
@@ -387,30 +274,33 @@
                                                                                   (cons (box #t) (stateVals state))) (cdr state))]
       [(and (eq? (vals declared) "false") (neq? (vars declared) 'return))   (list (list (cons (vars declared) (stateVars state))
                                                                                   (cons (box #f) (stateVals state))) (cdr state))]
-      [else                                                    (cons
-                                                                    (list (cons (vars declared) (stateVars state))
-                                                                      (cons (box (vals declared)) (stateVals state)))
-                                                                    (cdr state))])))
+      [else                                                    (list (list (cons (vars declared) (stateVars state))
+                                                                     (cons (vals declared) (stateVals state))) (cdr state))])))
 
 
 ; updates status given a declared variable
 (define StateUpdate
   (lambda (declared state)
     (cond
-      [(or (null? declared) (null? (car declared)))                                       state]
-      [(list? (vars declared))     (StateUpdate (list (car (vars declared)) (car (vals declared)))
+      [(or (null? declared)       (null? (car declared))) state]
+      [(list? (vars declared))    (StateUpdate (list (car (vars declared)) (car (vals declared)))
                                                (StateUpdate (list (cdr (vars declared)) (cdr (vals declared))) state))]
       [else                       (addState declared (removevar declared state))])))
 
 (define addFrame
   (lambda (state)
-      (cons (newframe) state)))
+    (cond
+      [(null? state) (list newframe)]
+      [else          (cons (car state) state)]
+    )
+  )
+)
 
 (define popFrame
   (lambda (state)
-    (cond 
-      [(null? state)   (error "Something went very wrong holy fuck we ran out of layers in the state")]
-      [else            (cdr state)])))
+    (cdr state)
+  )
+)
 
  ; cps helper function for remove  
 (define removevar-cps
@@ -431,8 +321,7 @@
 (define intexp?
   (lambda (expr state)
     (cond
-      ((number? expr)           #t)
-      ((and (box? expr) (number? (unbox expr))) #t)
+      ((number? expr) #t)
       ((and (declared? expr state) (number? (MgetState expr state))) #t)
       [(not (list? expr))       #f]
       ((eq? (operator expr) '+) #t)
@@ -446,9 +335,9 @@
 (define boolexp?
   (lambda (expr state)
     (cond
-      [(boolean? expr)           #t]
-      [(eq? 'true expr)          #t]
-      [(eq? 'false expr)         #t]
+      [(boolean? expr)     #t]
+      [(eq? 'true expr)    #t]
+      [(eq? 'false expr)   #t]
       [(and (declared? expr state) (boolean? (MgetState expr state))) #t]
       [(not (list? expr))        #f]
       [(eq? (operator expr) '&&) #t]
@@ -463,8 +352,6 @@
 
       (else #f))))
 
-
-
 ;;;; ***************************************************
 
 ;;;; *̵͖̻͋̓͑͜*̸̫͔̽̾͐͜*̴̡̦͋͝͠*̵̢̼͛͊̕͜*̵̡̺͇̐̐͘*̵͓̫̦͋͝͝*̸͇̦͓̓͑̚*̴̦̪͓͘͘̕*̵͔͉͉͑́͝*̸͉̫̻͆͑͝*̵͔͚̐̀̈́*̸̦͓͇̽͊*̴͓̪͚̚̚͠*̸̙̻̘̾͐*̸̡̠̒͜͝͠*̵̟̘̼̾́̓*̵͕͍͎͆̚*̸͎̠̾̾͐*̸̠͓͔̈́̿͝*̵͖͍͉͝͝͝*̸̦͖̟̒͆͒*̵͎͙̫͋̔̓*̵̻͔̾̈́͜͠*̸̡͖̦͛̾͝*̸͕̦̠͐̿̈́*̸͎̙̓̕*̵͉̪̓̈́̕*̸̫̪̘̾͋*̸̠̦́͠*̴̡̞͉͋̀̕*̵̢̪̺́͐*̸͙͚̺̕͘͠*̵̻͕͍͆̔̕*̴̞̠͚̔̚*̴̦͙̠͐͋̀*̴͕͉̫̒̈́̿*̴̙̞̺͆͋̾*̵͕̝̒͋*̵̡͙͋͐̚*̵̞̞̻͑̽͒*̴̦͓͌͐͊*̸̺̪̈́̓͘*̵͚͚̙͆͌͒*̴̢͔͉͐͐͝*̸͇̙͊̀͘͜*̸̠͙͌͝͝*̸͎̦̈́̔͋*̵͇͍̻̓̈́͛*̴̟̪͐͜͠͝*̵̢͍̓͐̓͜*̵̞̪̿͛͑
@@ -473,11 +360,13 @@
 
 ;;;; *̵͖̻͋̓͑͜*̸̫͔̽̾͐͜*̴̡̦͋͝͠*̵̢̼͛͊̕͜*̵̡̺͇̐̐͘*̵͓̫̦͋͝͝*̸͇̦͓̓͑̚*̴̦̪͓͘͘̕*̵͔͉͉͑́͝*̸͉̫̻͆͑͝*̵͔͚̐̀̈́*̸̦͓͇̽͊*̴͓̪͚̚̚͠*̸̙̻̘̾͐*̸̡̠̒͜͝͠*̵̟̘̼̾́̓*̵͕͍͎͆̚*̸͎̠̾̾͐*̸̠͓͔̈́̿͝*̵͖͍͉͝͝͝*̸̦͖̟̒͆͒*̵͎͙̫͋̔̓*̵̻͔̾̈́͜͠*̸̡͖̦͛̾͝*̸͕̦̠͐̿̈́*̸͎̙̓̕*̵͉̪̓̈́̕*̸̫̪̘̾͋*̸̠̦́͠*̴̡̞͉͋̀̕*̵̢̪̺́͐*̸͙͚̺̕͘͠*̵̻͕͍͆̔̕*̴̞̠͚̔̚*̴̦͙̠͐͋̀*̴͕͉̫̒̈́̿*̴̙̞̺͆͋̾*̵͕̝̒͋*̵̡͙͋͐̚*̵̞̞̻͑̽͒*̴̦͓͌͐͊*̸̺̪̈́̓͘*̵͚͚̙͆͌͒*̴̢͔͉͐͐͝*̸͇̙͊̀͘͜*̸̠͙͌͝͝*̸͎̦̈́̔͋*̵͇͍̻̓̈́͛*̴̟̪͐͜͠͝*̵̢͍̓͐̓͜*̵̞̪̿͛͑
 
+
+
 (define interpret
   (lambda (expr)
     (call/cc
       (lambda (return)
-        (MstateList expr (newstate) return
+        (MstateList expr newstate return
                     (lambda (state) (error 'unknownop "No loop to break out of"))
                     (lambda (state) (error 'unknownop "No loop to continue"))
                     (lambda (state) (error 'unknownop "Uncaught exception thrown")))))))
