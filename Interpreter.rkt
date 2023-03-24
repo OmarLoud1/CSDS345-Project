@@ -171,7 +171,6 @@
 
       (else (error 'unknownop "Bad Operator")))))
 
-
 (define MgetState
   (lambda (varName state)
     (cond
@@ -269,6 +268,10 @@
       [(eq? (operator expr) 'continue)                                                                  (Mcontinue state continue)]
       [(eq? (operator expr) 'begin)                                     (MstateList (args expr) state return break continue throw)]
       [else                                                                                     (error 'unknownop "Bad Statement")])))
+
+(define Mblock
+  (lambda expr-list state return break continue throw)
+    (popFrame (MstateList (args expr-list) (addFrame state) return break continue throw)))
 
 ; iterates across statement list executing expressions
 (define MstateList
