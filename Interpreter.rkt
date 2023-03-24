@@ -77,16 +77,12 @@
 ;retruns the variables from the state
 (define stateVars
   (lambda (state)
-    (car (car state))
-  )
-)
+    (car (car state))))
 
 ;returns the values from the state
 (define stateVals
   (lambda (state)
-    (car (cdr (car state)))
-  )
-)
+    (car (cdr (car state)))))
 
 ; retunrs the varibale from
 (define exception-var
@@ -414,10 +410,10 @@
 (define StateUpdate
   (lambda (declared state)
     (cond
-      [(or (null? declared) (null? (car declared)))                                       state]
-      [(list? (vars declared))     (StateUpdate (list (car (vars declared)) (car (vals declared)))
+      [(or (null? declared) (null? (car declared)))                                                              state]
+      [(list? (vars declared))            (StateUpdate (list (car (vars declared)) (car (vals declared)))
                                                (StateUpdate (list (cdr (vars declared)) (cdr (vals declared))) state))]
-      [else                       (addState declared (removevar declared state))])))
+      [else                                                          (addState declared (removevar declared state))])))
 
 
 ; returns the current frame
@@ -434,7 +430,7 @@
       [(null? statevars)                                                            (return statevars statevals)]
       [(eq? (car statevars) (car declared))                             (return (cdr statevars) (cdr statevals))]
       [else (removevar-cps declared (cdr statevars) (cdr statevals) 
-                                  (lambda (v1 v2) (return (cons (car statevars) v1) (cons (car statevals) v2))))])))
+                               (lambda (v1 v2) (return (cons (car statevars) v1) (cons (car statevals) v2))))])))
 
 
 ; removes the declared variable from the state
@@ -446,37 +442,36 @@
 (define intexp?
   (lambda (expr state)
     (cond
-      ((number? expr)           #t)
-      ((and (box? expr) (number? (unbox expr))) #t)
-      ((and (declared? expr state) (number? (MgetState expr state))) #t)
-      [(not (list? expr))       #f]
-      ((eq? (operator expr) '+) #t)
-      ((eq? (operator expr) '-) #t)
-      ((eq? (operator expr) '*) #t)
-      ((eq? (operator expr) '/) #t)
-      ((eq? (operator expr) '%) #t)
-      (else #f))))
+      ((number? expr)                                                    #t)
+      ((and (box? expr) (number? (unbox expr)))                          #t)
+      ((and (declared? expr state) (number? (MgetState expr state)))     #t)
+      [(not (list? expr))                                                #f]
+      ((eq? (operator expr) '+)                                          #t)
+      ((eq? (operator expr) '-)                                          #t)
+      ((eq? (operator expr) '*)                                          #t)
+      ((eq? (operator expr) '/)                                          #t)
+      ((eq? (operator expr) '%)                                          #t)
+      (else                                                              #f))))
 
 ; Finds the boolean value of an expression
 (define boolexp?
   (lambda (expr state)
     (cond
-      [(boolean? expr)           #t]
-      [(eq? 'true expr)          #t]
-      [(eq? 'false expr)         #t]
-      [(and (declared? expr state) (boolean? (MgetState expr state))) #t]
-      [(not (list? expr))        #f]
-      [(eq? (operator expr) '&&) #t]
-      [(eq? (operator expr) '||) #t]
-      [(eq? (operator expr) '!)  #t]
-      [(eq? (operator expr) '==) #t]
-      [(eq? (operator expr) '!=) #t]
-      [(eq? (operator expr) '<)  #t]
-      [(eq? (operator expr) '>)  #t]
-      [(eq? (operator expr) '<=) #t]
-      [(eq? (operator expr) '>=) #t]
-
-      (else #f))))
+      [(boolean? expr)                                                   #t]
+      [(eq? 'true expr)                                                  #t]
+      [(eq? 'false expr)                                                 #t]
+      [(and (declared? expr state) (boolean? (MgetState expr state)))    #t]
+      [(not (list? expr))                                                #f]
+      [(eq? (operator expr) '&&)                                         #t]
+      [(eq? (operator expr) '||)                                         #t]
+      [(eq? (operator expr) '!)                                          #t]
+      [(eq? (operator expr) '==)                                         #t]
+      [(eq? (operator expr) '!=)                                         #t]
+      [(eq? (operator expr) '<)                                          #t]
+      [(eq? (operator expr) '>)                                          #t]
+      [(eq? (operator expr) '<=)                                         #t]
+      [(eq? (operator expr) '>=)                                         #t]
+      (else                                                              #f))))
 
 
 
