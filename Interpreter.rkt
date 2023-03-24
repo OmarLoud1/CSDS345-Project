@@ -227,9 +227,9 @@
 (define Mif
   (lambda (condition expr exprelse state return break continue throw)
     (cond
-      [(eq? (Mbool condition state) #t)     (StateUpdate (Mstate expr state return break continue throw) state)]
-      [(not(null? exprelse))            (StateUpdate (MstateList exprelse state return break continue throw) state)]
-      [else                                                                       state])))
+      [(eq? (Mbool condition state) #t)     (Mstate expr state return break continue throw)]
+      [(not(null? exprelse))            (Mstate exprelse state return break continue throw)]
+      [else                                                                           state])))
 
 
 ; executes a while loop given a condition, an expression to execute while true, and the state
@@ -325,6 +325,7 @@
       [(eq? (operator expr) 'break)                                                                           (Mbreak state break)]
       [(eq? (operator expr) 'continue)                                                                  (Mcontinue state continue)]
       [(eq? (operator expr) 'begin)                                         (Mbegin (args expr) state return break continue throw)]
+      [(eq? (operator expr) 'try)   (Mtry (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
       [else                                                                                     (error 'unknownop "Bad Statement")])))
       
 (define Mupdate
@@ -341,7 +342,7 @@
       [(or (null? (vals layer)) (null? (vars layer)))                              (error 'gStateError "There was a problem finding that variable.")]
       [(and (eq? varName (car (vars layer))) (eq? '$null$ (car (vals layer))))   (error 'gStateError "This variable has not been assigned a value.")]
       [(eq? varName (car (vars layer)))                                                                             (set-box (car (vals layer)) val)]
-      [(not (eq? varName (car (vars layer))))                                  (Mupdate_layer varName (list (cdr (vars layer)) (cdr (vals layer))))]
+      [(not (eq? varName (car (vars layer))))                               (Mupdate_layer varName val (list (cdr (vars layer)) (cdr (vals layer))))]
       [else                                                                        (error 'gStateError "There was a problem finding that variable.")])))  
 
 
@@ -477,7 +478,7 @@
                     (lambda (state) (error 'unknownop "Uncaught exception thrown")))))))
     
 
-(interpret (parser "tests2/test2.txt"))
+(interpret (parser "tests2/test15.txt"))
 
 
 
