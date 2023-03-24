@@ -13,8 +13,17 @@
 ;Helper functions to parse the lists of expressions
 ;;;; ***************************************************
 
+<<<<<<< Updated upstream
 (define newframe '(()()))
 (define newstate newframe)
+=======
+(define newframe
+  (lambda ()
+    '(()())))
+(define newstate
+  (lambda ()
+    (list (newframe))))
+>>>>>>> Stashed changes
 
 ;gets the operator in an expression
 (define operator
@@ -206,6 +215,42 @@
           [else                                                                                                           state])))))
 
 
+(define Mtry
+  (lambda (try except finally environment return break continue throw)
+    (call/cc
+     (lambda (jump)
+              (new-break
+               )
+              (new-continue
+               (lambda (env) (continue
+                              (MstateList finally-block env return break continue throw compile-type))))
+              (new-throw
+               (create-throw-catch-continuation
+                (get-catch statement)
+                environment return break continue throw compile-type jump finally-block)))
+         (MstateList (finally-into-block finally)
+                          (MstateList (try-into-block try)
+                                      state
+                                      (lambda (v) (begin (Mstatelist (finally-into-block finally) state return break continue throw) (return v)))
+                                      (lambda (env) (break (MstateList (finally-into-block finally) env return break continue throw compile-type))) new-continue new-throw compile-type)
+                          return break continue throw compile-type))))))
+
+(define statement-into-block
+  (lambda (statement)
+    (cons 'begin statement)))
+
+(define try-into-block
+  (lambda (try)
+    (statement-into-block try)))
+
+(define except-into-block
+  (lambda (except)
+    (statement-into-block except)))
+
+(define finally-into-block
+  (lambda (finally)
+    (statement-into-block finally)))
+
 (define Mbreak
   (lambda (state break)
     (break state)))
@@ -275,6 +320,24 @@
                                                (StateUpdate (list (cdr (vars declared)) (cdr (vals declared))) state))]
       [else                       (addState declared (removevar declared state))])))
 
+<<<<<<< Updated upstream
+=======
+(define addFrame
+  (lambda (state)
+    (cond
+      [(null? state) (list (newframe))]
+      [else          (cons (newframe) state)]
+    )
+  )
+)
+
+(define popFrame
+  (lambda (state)
+    (cdr state)
+  )
+)
+
+>>>>>>> Stashed changes
  ; cps helper function for remove  
 (define removevar-cps
   (lambda (declared statevars statevals return)
@@ -294,7 +357,12 @@
 (define intexp?
   (lambda (expr state)
     (cond
+<<<<<<< Updated upstream
       ((number? expr) #t)
+=======
+      ((number? expr)           #t)
+      ((and (box? expr) (number? (unbox expr))) #t)
+>>>>>>> Stashed changes
       ((and (declared? expr state) (number? (MgetState expr state))) #t)
       [(not (list? expr))       #f]
       ((eq? (operator expr) '+) #t)
@@ -308,9 +376,9 @@
 (define boolexp?
   (lambda (expr state)
     (cond
-      [(boolean? expr)     #t]
-      [(eq? 'true expr)    #t]
-      [(eq? 'false expr)   #t]
+      [(boolean? expr)           #t]
+      [(eq? 'true expr)          #t]
+      [(eq? 'false expr)         #t]
       [(and (declared? expr state) (boolean? (MgetState expr state))) #t]
       [(not (list? expr))        #f]
       [(eq? (operator expr) '&&) #t]
@@ -339,7 +407,7 @@
   (lambda (expr)
     (call/cc
       (lambda (return)
-        (MstateList expr newstate return
+        (MstateList expr (newstate) return
                     (lambda (state) (error 'unknownop "No loop to break out of"))
                     (lambda (state) (error 'unknownop "No loop to continue"))
                     (lambda (state) (error 'unknownop "Uncaught exception thrown")))))))
