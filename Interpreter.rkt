@@ -168,9 +168,9 @@
     (cond
       [(or (null? (stateVals state)) (null? (stateVars state)))                              (error 'gStateError "There was a problem finding that variable.")]
       [(and (eq? varName (car (stateVars state))) (eq? '$null$ (car (stateVals state))))   (error 'gStateError "This variable has not been assigned a value.")]
-      [(eq? varName (car (stateVars state)))                                                                                           (car (stateVals state))]
-      [(not (eq? varName (car (stateVars state))))                                       (MgetState varName (list (cdr (stateVars state)) (cdr (stateVals state))))]
-      [else                                                                        (error 'gStateError "There was a problem finding that variable.")])))  
+      [(eq? varName (car (stateVars state)))                                                                                   (unbox (car (stateVals state)))]
+      [(not (eq? varName (car (stateVars state))))                                  (MgetState varName (list (cdr (stateVars state)) (cdr (stateVals state))))]
+      [else                                                                                  (error 'gStateError "There was a problem finding that variable.")])))  
 
 
 ; delares a variable
@@ -275,16 +275,18 @@
                                                                                   (cons (box #t) (stateVals state))) (cdr state))]
       [(and (eq? (vals declared) "false") (neq? (vars declared) 'return))   (list (list (cons (vars declared) (stateVars state))
                                                                                   (cons (box #f) (stateVals state))) (cdr state))]
-      [else                                                    (list (list (cons (vars declared) (stateVars state))
-                                                                     (cons (vals declared) (stateVals state))) (cdr state))])))
+      [else                                                    (cons
+                                                                    (list (cons (vars declared) (stateVars state))
+                                                                      (cons (box (vals declared)) (stateVals state)))
+                                                                    (cdr state))])))
 
 
 ; updates status given a declared variable
 (define StateUpdate
   (lambda (declared state)
     (cond
-      [(or (null? declared)       (null? (car declared))) state]
-      [(list? (vars declared))    (StateUpdate (list (car (vars declared)) (car (vals declared)))
+      [(or (null? declared) (null? (car declared)))                                       state]
+      [(list? (vars declared))     (StateUpdate (list (car (vars declared)) (car (vals declared)))
                                                (StateUpdate (list (cdr (vars declared)) (cdr (vals declared))) state))]
       [else                       (addState declared (removevar declared state))])))
 
@@ -374,7 +376,7 @@
                     (lambda (state) (error 'unknownop "Uncaught exception thrown")))))))
     
 
-(interpret (parser "tests/test3.txt"))
+(interpret (parser "tests/test1.txt"))
 
 
 
