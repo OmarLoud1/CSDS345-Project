@@ -13,17 +13,13 @@
 ;Helper functions to parse the lists of expressions
 ;;;; ***************************************************
 
-<<<<<<< Updated upstream
-(define newframe '(()()))
-(define newstate newframe)
-=======
+
 (define newframe
   (lambda ()
     '(()())))
 (define newstate
   (lambda ()
     (list (newframe))))
->>>>>>> Stashed changes
 
 ;gets the operator in an expression
 (define operator
@@ -320,8 +316,6 @@
                                                (StateUpdate (list (cdr (vars declared)) (cdr (vals declared))) state))]
       [else                       (addState declared (removevar declared state))])))
 
-<<<<<<< Updated upstream
-=======
 (define addFrame
   (lambda (state)
     (cond
@@ -337,7 +331,7 @@
   )
 )
 
->>>>>>> Stashed changes
+
  ; cps helper function for remove  
 (define removevar-cps
   (lambda (declared statevars statevals return)
@@ -357,12 +351,8 @@
 (define intexp?
   (lambda (expr state)
     (cond
-<<<<<<< Updated upstream
-      ((number? expr) #t)
-=======
       ((number? expr)           #t)
       ((and (box? expr) (number? (unbox expr))) #t)
->>>>>>> Stashed changes
       ((and (declared? expr state) (number? (MgetState expr state))) #t)
       [(not (list? expr))       #f]
       ((eq? (operator expr) '+) #t)
