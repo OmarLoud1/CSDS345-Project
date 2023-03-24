@@ -162,14 +162,22 @@
       (else (error 'unknownop "Bad Operator")))))
 
 
-; Gets the value of a variable
 (define MgetState
   (lambda (varName state)
     (cond
-      [(or (null? (stateVals state)) (null? (stateVars state)))                              (error 'gStateError "There was a problem finding that variable.")]
-      [(and (eq? varName (car (stateVars state))) (eq? '$null$ (car (stateVals state))))   (error 'gStateError "This variable has not been assigned a value.")]
-      [(eq? varName (car (stateVars state)))                                                                                   (unbox (car (stateVals state)))]
-      [(not (eq? varName (car (stateVars state))))                                  (MgetState varName (list (cdr (stateVars state)) (cdr (stateVals state))))]
+      [(null? state)        (error 'gStateError "The variable has not been declared.")]
+      [(contains? varName (stateVars state))            (MgetState_helper (car state))]
+      [else                                             (MgetState varName (cdr state))])))
+
+
+; Gets the value of a variable
+(define MgetState_helper
+  (lambda (varName layer)
+    (cond
+      [(or (null? (vals layer)) (null? (vars layer)))                              (error 'gStateError "There was a problem finding that variable.")]
+      [(and (eq? varName (car (vars layer))) (eq? '$null$ (car (vals layer))))   (error 'gStateError "This variable has not been assigned a value.")]
+      [(eq? varName (car (vars layer)))                                                                                   (unbox (car (value layer)))]
+      [(not (eq? varName (car (vars layer))))                                  (MgetState varName (list (cdr (vars layer)) (cdr (vals layer))))]
       [else                                                                                  (error 'gStateError "There was a problem finding that variable.")])))  
 
 
