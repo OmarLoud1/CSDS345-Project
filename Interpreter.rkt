@@ -123,9 +123,8 @@
   (lambda (x list)
     (cond
       ((null? list) #f)
-      (( pair? (car list)) (or (member*? x (car list)) (member*? x (cdr list))))
       ((eq? x (car list)) #t)
-      (else member*? x (cdr list)))))
+      (else contains? x (cdr list)))))
 
 
 
@@ -138,7 +137,7 @@
   (lambda (expr state)
     (cond
       ((number? expr)                                                                                           expr)
-      ((box? expr)                                                                                              (unbox expr))
+      ((box? expr)                                                                                      (unbox expr))
       ((not (list? expr))                                                                     (MgetState expr state))
       ((and (empty? (rightoperand expr)) (eq? (operator expr) '-))        (- 0  (Minteger (leftoperand expr) state)))
       ((eq? (operator expr) '+) (+         (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state)))
@@ -174,8 +173,8 @@
 (define MgetState
   (lambda (varName state)
     (cond
-      [(null? state)        (error 'gStateError "The variable has not been declared.")]
-      [(contains? varName (stateVars state))            (MgetState_helper (car state))]
+      [(null? state)         (error 'gStateError "The variable has not been declared.")]
+      [(contains? varName (stateVars state))     (MgetState_helper varName (car state))]
       [else                                             (MgetState varName (cdr state))])))
 
 
@@ -185,7 +184,7 @@
     (cond
       [(or (null? (vals layer)) (null? (vars layer)))                              (error 'gStateError "There was a problem finding that variable.")]
       [(and (eq? varName (car (vars layer))) (eq? '$null$ (car (vals layer))))   (error 'gStateError "This variable has not been assigned a value.")]
-      [(eq? varName (car (vars layer)))                                                                                  (unbox (car (value layer)))]
+      [(eq? varName (car (vars layer)))                                                                                  (unbox (car (vals layer)))]
       [(not (eq? varName (car (vars layer))))                                       (MgetState varName (list (cdr (vars layer)) (cdr (vals layer))))]
       [else                                                                        (error 'gStateError "There was a problem finding that variable.")])))  
 
@@ -270,8 +269,8 @@
       [else                                                                                     (error 'unknownop "Bad Statement")])))
 
 (define Mblock
-  (lambda expr-list state return break continue throw)
-    (popFrame (MstateList (args expr-list) (addFrame state) return break continue throw)))
+  (lambda (expr-list state return break continue throw)
+    (popFrame (MstateList (args expr-list) (addFrame state) return break continue throw))))
 
 ; iterates across statement list executing expressions
 (define MstateList
@@ -313,19 +312,13 @@
 
 (define addFrame
   (lambda (state)
-      (cons (newframe) state)
-    )
-  )
-)
+      (cons (newframe) state)))
 
 (define popFrame
   (lambda (state)
     (cond 
       [(null? state)   (error "Something went very wrong holy fuck we ran out of layers in the state")]
-      [else            (cdr state)]
-    )
-  )
-)
+      [else            (cdr state)])))
 
  ; cps helper function for remove  
 (define removevar-cps
