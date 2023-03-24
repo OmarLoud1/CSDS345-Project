@@ -239,7 +239,7 @@
       (lambda(break)
         (cond
           [(Mbool condition state) (Mwhile condition expr (Mstate expr state return break 
-                                                          (lambda (env) (break (Mwhile condition expr env return throw))) throw) return throw)]
+                                                          (lambda (state2) (break (Mwhile condition expr state2 return throw))) throw) return throw)]
           [else                                                                                                           state])))))
 
 
@@ -247,32 +247,37 @@
   (lambda (try except finally state return break continue throw)
     (call/cc
      (lambda (jump)
-         (Mbegin (finally-into-block finally)
-                          (Mbegin (try-into-block try)
+         (Mstate (finally-into-block finally)
+                          (Mstate (try-into-block try)
                                       state
-                                      (lambda (v) (begin (Mbegin (finally-into-block finally) state return break continue throw) (return v)))
-                                      (lambda (env) (break (Mbegin (finally-into-block finally) env return break continue throw)))
-                                      (lambda (env) (continue (Mbegin (finally-into-block finally) env return break continue throw)))
-                                      (except-continuation except finally state return break continue throw jump (finally-into-block finally))))
-                          return break continue throw))))
+                                      (lambda (v) (begin (Mstate (finally-into-block finally) state return break continue throw) (return v)))
+                                      (lambda (state2) (break (Mstate (finally-into-block finally) state2 return break continue throw)))
+                                      (lambda (state2) (continue (Mstate (finally-into-block finally) state2 return break continue throw)))
+                                      (except-continuation except finally state return break continue throw jump (finally-into-block finally)))
+                          return break continue throw)))))
 
 (define except-continuation
   (lambda (except finally state return break continue throw jump finally-block)
     (cond
       ((null? except)
-             (lambda (ex env) (throw ex (Mbegin finally-block env return break continue throw)))) 
+             (lambda (exception state2) (throw exception (Mbegin finally-block state2 return break continue throw)))) 
       ((not (eq? 'catch (operator except)))
              (error "Incorrect catch statement"))
       (else
-             (lambda (ex env) (jump (Mbegin (finally-into-block finally)
+             (lambda (exception state2) (jump (Mstate (finally-into-block finally)
                                      (popFrame (MstateList
                                                  (body except)
-                                                 (addFrame state)
+                                                 (Mdeclare (exception-var except) exception (addFrame state))
                                                  return 
                                                  (lambda (state2) (break (popFrame state2))) 
                                                  (lambda (state2) (continue (popFrame state2))) 
-                                                 (lambda (state2) (throw (popFrame state2)))))
+                                                 (lambda (state2) (throw exception (popFrame state2)))))
                                      return break continue throw)))))))
+
+
+(define exception-var
+  (lambda (statement)
+    (car (car (cdr statement)))))
 
 (define body
   (lambda (statement)
@@ -280,11 +285,11 @@
 
 (define statement-into-block
   (lambda (statement)
-    (cons 'begin statement)))
+    (cons 'begin (car (cdr statement)))))
 
 (define try-into-block
   (lambda (try)
-    (statement-into-block try)))
+    (cons 'begin try)))
 
 (define except-into-block
   (lambda (except)
@@ -318,7 +323,7 @@
       [(intexp? expr state)                                                                                  (Minteger expr state)]
       [(boolexp? expr state)                                                                                    (Mbool expr state)]
       [(eq? (operator expr) 'return)                                    (Mreturn (operand expr) state return break continue throw)]
-      [(eq? (operator expr) 'var)                             (Mdeclare (leftoperand expr) (Mval (rightoperand expr) state) state)]
+      [(eq? (operator expr) 'var)                                          (Mdeclare (leftoperand expr) (rightoperand expr) state)]
       [(eq? (operator expr) '=)                                (Mupdate (leftoperand expr) (Mval (rightoperand expr) state) state)]
       [(eq? (operator expr) 'if)     (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
       [(eq? (operator expr) 'while)                             (Mwhile (leftoperand expr) (rightoperand expr) state return throw)]
@@ -326,6 +331,7 @@
       [(eq? (operator expr) 'continue)                                                                  (Mcontinue state continue)]
       [(eq? (operator expr) 'begin)                                         (Mbegin (args expr) state return break continue throw)]
       [(eq? (operator expr) 'try)   (Mtry (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
+      [(eq? (operator expr) 'throw)                                                                   (throw (operand expr) state)]
       [else                                                                                     (error 'unknownop "Bad Statement")])))
       
 (define Mupdate
@@ -357,7 +363,7 @@
     (popFrame (MstateList expr-list (addFrame state) return
                                          (lambda (state1) (break (popFrame state1)))
                                          (lambda (state1) (continue (popFrame state1)))
-                                         (lambda (state1) (throw (popFrame state1)))))))
+                                         (lambda (exception state1) (throw exception (popFrame state1)))))))
 
 ; iterates across statement list executing expressions
 (define MstateList
@@ -475,10 +481,10 @@
         (MstateList expr (newstate) return
                     (lambda (state) (error 'unknownop "No loop to break out of"))
                     (lambda (state) (error 'unknownop "No loop to continue"))
-                    (lambda (state) (error 'unknownop "Uncaught exception thrown")))))))
+                    (lambda (exception state) (error 'unknownop "Uncaught exception thrown")))))))
     
 
-(interpret (parser "tests2/test15.txt"))
+(interpret (parser "tests2/test19.txt"))
 
 
 
