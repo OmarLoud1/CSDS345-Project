@@ -271,7 +271,7 @@
                                                  return 
                                                  (lambda (state2) (break (popFrame state2))) 
                                                  (lambda (state2) (continue (popFrame state2))) 
-                                                 (lambda (state2) (throw exception (popFrame state2)))))
+                                                 (lambda (exception2 state2) (throw exception2 (popFrame state2)))))
                                      return break continue throw)))))))
 
 
@@ -285,7 +285,9 @@
 
 (define statement-into-block
   (lambda (statement)
-    (cons 'begin (car (cdr statement)))))
+    (cond
+      [(null? statement) statement]
+      [else  (cons 'begin (car (cdr statement)))])))
 
 (define try-into-block
   (lambda (try)
@@ -320,6 +322,7 @@
 (define Mstate
   (lambda (expr state return break continue throw)
     (cond
+      [(null? expr)                                                                                                          state]
       [(intexp? expr state)                                                                                  (Minteger expr state)]
       [(boolexp? expr state)                                                                                    (Mbool expr state)]
       [(eq? (operator expr) 'return)                                    (Mreturn (operand expr) state return break continue throw)]
@@ -484,7 +487,7 @@
                     (lambda (exception state) (error 'unknownop "Uncaught exception thrown")))))))
     
 
-(interpret (parser "tests2/test19.txt"))
+(interpret (parser "tests2/test17.txt"))
 
 
 
