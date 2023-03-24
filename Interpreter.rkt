@@ -77,16 +77,12 @@
 ;retruns the variables from the state
 (define stateVars
   (lambda (state)
-    (car (car state))
-  )
-)
+    (car (car state))))
 
 ;returns the values from the state
 (define stateVals
   (lambda (state)
-    (car (cdr (car state)))
-  )
-)
+    (car (cdr (car state)))))
 
 ; retunrs the varibale from
 (define exception-var
@@ -397,8 +393,7 @@
                                                                                   (cons (box #t) (stateVals state))) (cdr state))]
       [(and (eq? (vals declared) "false") (neq? (vars declared) 'return))   (list (list (cons (vars declared) (stateVars state))
                                                                                   (cons (box #f) (stateVals state))) (cdr state))]
-      [else                                                    (cons
-                                                                    (list (cons (vars declared) (stateVars state))
+      [else                                                    (cons (list (cons (vars declared) (stateVars state))
                                                                       (cons (box (vals declared)) (stateVals state)))
                                                                     (cdr state))])))
 
@@ -407,10 +402,10 @@
 (define StateUpdate
   (lambda (declared state)
     (cond
-      [(or (null? declared) (null? (car declared)))                                       state]
+      [(or (null? declared) (null? (car declared)))                                                              state]
       [(list? (vars declared))     (StateUpdate (list (car (vars declared)) (car (vals declared)))
                                                (StateUpdate (list (cdr (vars declared)) (cdr (vals declared))) state))]
-      [else                       (addState declared (removevar declared state))])))
+      [else                                                             (addState declared (removevar declared state))])))
 
 (define addFrame
   (lambda (state)
