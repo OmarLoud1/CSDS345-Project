@@ -16,7 +16,7 @@
 
 ; (load "lex.scm")
 (require "lex.rkt")
-
+(provide parser)
 (define parser
   (lambda (filename)
     (begin (start-lex filename)
