@@ -221,27 +221,30 @@
                                       (lambda (v) (begin (Mstatelist (finally-into-block finally) state return break continue throw) (return v)))
                                       (lambda (env) (break (MstateList (finally-into-block finally) env return break continue throw compile-type)))
                                       (lambda (env) (continue (MstateList finally-block env return break continue throw compile-type)))
-                                      (except-continuation except state return break continue throw jump finally-block)))
-                          return break continue throw compile-type))))
+                                      (except-continuation except state return break continue throw jump (finally-into-block finally))))
+                          return break continue throw))))
 
 (define except-continuation
-  (lambda (catch-statement environment return break continue throw jump finally-block)
+  (lambda (except environment return break continue throw jump finally-block)
     (cond
       ((null? catch-statement)
-       (lambda (ex env) (throw ex (interpret-block finally-block env return break continue throw compile-type)))) 
-      ((not (eq? 'catch (statement-type catch-statement)))
-       (myerror "Incorrect catch statement"))
-      (else (lambda (ex env)
-              (jump (interpret-block finally-block
-                                     (pop-frame (interpret-statement-list 
-                                                 (get-body catch-statement) 
-                                                 (insert (catch-var catch-statement) ex (push-frame environment))
+             (lambda (ex env) (throw ex (Mstatelist finally-block env return break continue throw)))) 
+      ((not (eq? 'catch (operator catch-statement)))
+             (myerror "Incorrect catch statement"))
+      (else
+             (lambda (ex env) (jump (Mblock finally-block
+                                     (pop-frame (Mstatelist
+                                                 (body except)
+                                                 (MaddState (catch-var catch-statement) ex (push-frame environment))
                                                  return 
                                                  (lambda (env2) (break (pop-frame env2))) 
                                                  (lambda (env2) (continue (pop-frame env2))) 
-                                                 (lambda (v env2) (throw v (pop-frame env2)))
-                                                 compile-type))
-                                     return break continue throw compile-type)))))))
+                                                 (lambda (v env2) (throw v (pop-frame env2)))))
+                                     return break continue throw)))))))
+
+(define body
+  (lambda (statement)
+    (caddr statement)))
 
 (define statement-into-block
   (lambda (statement)
