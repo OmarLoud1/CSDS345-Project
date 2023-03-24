@@ -491,6 +491,7 @@
 ;;;; ***************************************************
 
 ; the main method that runs out interpreter on the parsed code and outputs the result
+(provide interpret)
 (define interpret
   (lambda (expr)
     (call/cc
