@@ -322,9 +322,9 @@
 (define Mreturn
   (lambda (expr state return break continue throw)
     (cond
-      [(eq? (Mstate expr state return break continue throw) #t)               (return "true")]
-      [(eq? (Mstate expr state return break continue throw) #f)              (return "false")]
-      [else                          (return (Mstate expr state return break continue throw))])))
+      [(eq? (Mval expr state) #t)               (return "true")]
+      [(eq? (Mval expr state) #f)              (return "false")]
+      [else                          (return (Mval expr state))])))
 
 
 ; determines the type of statement and executes its function
@@ -494,7 +494,7 @@
                     (lambda (exception state) (error 'unknownop "Uncaught exception thrown")))))))
     
 
-(interpret (parser "tests2/test17.txt"))
+(interpret (parser "tests2/test5.txt"))
 
 
 
