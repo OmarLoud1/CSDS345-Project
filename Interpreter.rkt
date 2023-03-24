@@ -215,21 +215,33 @@
   (lambda (try except finally environment return break continue throw)
     (call/cc
      (lambda (jump)
-              (new-break
-               )
-              (new-continue
-               (lambda (env) (continue
-                              (MstateList finally-block env return break continue throw compile-type))))
-              (new-throw
-               (create-throw-catch-continuation
-                (get-catch statement)
-                environment return break continue throw compile-type jump finally-block)))
          (MstateList (finally-into-block finally)
                           (MstateList (try-into-block try)
                                       state
                                       (lambda (v) (begin (Mstatelist (finally-into-block finally) state return break continue throw) (return v)))
-                                      (lambda (env) (break (MstateList (finally-into-block finally) env return break continue throw compile-type))) new-continue new-throw compile-type)
-                          return break continue throw compile-type))))))
+                                      (lambda (env) (break (MstateList (finally-into-block finally) env return break continue throw compile-type)))
+                                      (lambda (env) (continue (MstateList finally-block env return break continue throw compile-type)))
+                                      (except-continuation except state return break continue throw jump finally-block)))
+                          return break continue throw compile-type))))
+
+(define except-continuation
+  (lambda (catch-statement environment return break continue throw jump finally-block)
+    (cond
+      ((null? catch-statement)
+       (lambda (ex env) (throw ex (interpret-block finally-block env return break continue throw compile-type)))) 
+      ((not (eq? 'catch (statement-type catch-statement)))
+       (myerror "Incorrect catch statement"))
+      (else (lambda (ex env)
+              (jump (interpret-block finally-block
+                                     (pop-frame (interpret-statement-list 
+                                                 (get-body catch-statement) 
+                                                 (insert (catch-var catch-statement) ex (push-frame environment))
+                                                 return 
+                                                 (lambda (env2) (break (pop-frame env2))) 
+                                                 (lambda (env2) (continue (pop-frame env2))) 
+                                                 (lambda (v env2) (throw v (pop-frame env2)))
+                                                 compile-type))
+                                     return break continue throw compile-type)))))))
 
 (define statement-into-block
   (lambda (statement)
