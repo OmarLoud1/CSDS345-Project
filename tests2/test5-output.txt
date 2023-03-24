@@ -1,1 +1,1 @@
-error
+gStateError: Variable not declared: min
