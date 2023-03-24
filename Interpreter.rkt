@@ -13,8 +13,13 @@
 ;Helper functions to parse the lists of expressions
 ;;;; ***************************************************
 
-(define newframe '(()()))
-(define newstate (list newframe))
+(define newframe
+  (lambda ()
+    '(()())))
+
+(define newstate
+  (lambda ()
+    (list (newframe))))
 
 ;gets the operator in an expression
 (define operator
@@ -260,17 +265,52 @@
       [(boolexp? expr state)                                                                                    (Mbool expr state)]
       [(eq? (operator expr) 'return)                                    (Mreturn (operand expr) state return break continue throw)]
       [(eq? (operator expr) 'var)                                          (Mdeclare (leftoperand expr) (rightoperand expr) state)]
-      [(eq? (operator expr) '=)                                             (Massign (leftoperand expr) (rightoperand expr) state)]
+      [(eq? (operator expr) '=)                                             (Mupdate (leftoperand expr) (rightoperand expr) state)]
       [(eq? (operator expr) 'if)     (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
       [(eq? (operator expr) 'while)                             (Mwhile (leftoperand expr) (rightoperand expr) state return throw)]
       [(eq? (operator expr) 'break)                                                                           (Mbreak state break)]
       [(eq? (operator expr) 'continue)                                                                  (Mcontinue state continue)]
-      [(eq? (operator expr) 'begin)                                     (MstateList (args expr) state return break continue throw)]
+      [(eq? (operator expr) 'begin)                                         (Mbegin (args expr) state return break continue throw)]
       [else                                                                                     (error 'unknownop "Bad Statement")])))
 
-(define Mblock
+(define Mupdate
+  (lambda (varName val state)
+    (cond
+      [(intexp? val state)  (Mupdate_helper varName (Minteger val state) state)]
+      [(boolexp? val state)    (Mupdate_helper varName (Mbool val state) state)]
+      [else                         (error "Variable not interpretable")])))
+      
+
+(define Mupdate_helper
+  (lambda (varName val state)
+    (cond
+      [(null? state)                                              (error 'gStateError "The variable has not been declared.")]
+      [(contains? varName (stateVars state))  (cons (begin (Mupdate_layer varName val (car state)) (car state)) (cdr state))]
+      [else                                                      (cons (car state) (Mupdate_helper varName val (cdr state)))])))
+
+; Gets the value of a variable
+(define Mupdate_layer
+  (lambda (varName val layer)
+    (cond
+      [(or (null? (vals layer)) (null? (vars layer)))                              (error 'gStateError "There was a problem finding that variable.")]
+      [(and (eq? varName (car (vars layer))) (eq? '$null$ (car (vals layer))))   (error 'gStateError "This variable has not been assigned a value.")]
+      [(eq? varName (car (vars layer)))                                                                             (set-box (car (vals layer)) val)]
+      [(not (eq? varName (car (vars layer))))                                  (Mupdate_layer varName (list (cdr (vars layer)) (cdr (vals layer))))]
+      [else                                                                        (error 'gStateError "There was a problem finding that variable.")])))  
+
+
+
+(define set-box
+  (lambda (box val)
+    (begin (set-box! box val) box)))
+
+
+(define Mbegin
   (lambda (expr-list state return break continue throw)
-    (popFrame (MstateList (args expr-list) (addFrame state) return break continue throw))))
+    (popFrame (MstateList expr-list (addFrame state) return
+                                         (lambda (state1) (break (popFrame state1)))
+                                         (lambda (state1) (continue (popFrame state1)))
+                                         (lambda (state1) (throw (popFrame state1)))))))
 
 ; iterates across statement list executing expressions
 (define MstateList
@@ -385,7 +425,7 @@
   (lambda (expr)
     (call/cc
       (lambda (return)
-        (MstateList expr newstate return
+        (MstateList expr (newstate) return
                     (lambda (state) (error 'unknownop "No loop to break out of"))
                     (lambda (state) (error 'unknownop "No loop to continue"))
                     (lambda (state) (error 'unknownop "Uncaught exception thrown")))))))
