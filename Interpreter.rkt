@@ -119,6 +119,16 @@
 
 
 
+(define contains?
+  (lambda (x list)
+    (cond
+      ((null? list) #f)
+      (( pair? (car list)) (or (member*? x (car list)) (member*? x (cdr list))))
+      ((eq? x (car list)) #t)
+      (else member*? x (cdr list)))))
+
+
+
 ;;;; ***************************************************
 ; Main functions to parse the statements
 ;;;; ***************************************************
