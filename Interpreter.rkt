@@ -533,7 +533,7 @@
                                  [expected-output (with-input-from-file (format "tests2/test~a-output.txt" i) read)])
                              (check-equal? (interpret (parser test-file)) expected-output)))])))
 
-(run-tests 36)
+(run-tests 41)
 
 
 

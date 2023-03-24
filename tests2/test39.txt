@@ -1,10 +1,22 @@
-var x = 0;
-var sum = 0;
-while (x < 5) {
-    sum = sum + x;
-    x = x + 1;
-    if (x == 3) {
-        break;
-    }
+var x = 10;
+var catchVar = 0;
+var finallyVar = 0;
+
+var i = true;
+while (i) {
+	i = false;
+	try {
+		var y = 2;
+		x = x * y;
+		continue;
+		x = 5;
+		throw 5;
+	}
+	catch(e) {
+		catchVar = 1;
+	}
+	finally {
+		finallyVar = 1;
+	}
 }
-return result;
+return catchVar + finallyVar;
