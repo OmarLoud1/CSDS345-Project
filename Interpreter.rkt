@@ -13,6 +13,7 @@
 ;Helper functions to parse the lists of expressions
 ;;;; ***************************************************
 
+
 (define newframe
   (lambda ()
     '(()())))
@@ -240,6 +241,57 @@
           [else                                                                                                           state])))))
 
 
+(define Mtry
+  (lambda (try except finally environment return break continue throw)
+    (call/cc
+     (lambda (jump)
+         (MstateList (finally-into-block finally)
+                          (MstateList (try-into-block try)
+                                      state
+                                      (lambda (v) (begin (Mstatelist (finally-into-block finally) state return break continue throw) (return v)))
+                                      (lambda (env) (break (MstateList (finally-into-block finally) env return break continue throw compile-type)))
+                                      (lambda (env) (continue (MstateList finally-block env return break continue throw compile-type)))
+                                      (except-continuation except state return break continue throw jump (finally-into-block finally))))
+                          return break continue throw))))
+
+(define except-continuation
+  (lambda (except environment return break continue throw jump finally-block)
+    (cond
+      ((null? catch-statement)
+             (lambda (ex env) (throw ex (Mstatelist finally-block env return break continue throw)))) 
+      ((not (eq? 'catch (operator catch-statement)))
+             (myerror "Incorrect catch statement"))
+      (else
+             (lambda (ex env) (jump (Mblock finally-block
+                                     (pop-frame (Mstatelist
+                                                 (body except)
+                                                 (MaddState (catch-var catch-statement) ex (push-frame environment))
+                                                 return 
+                                                 (lambda (env2) (break (pop-frame env2))) 
+                                                 (lambda (env2) (continue (pop-frame env2))) 
+                                                 (lambda (v env2) (throw v (pop-frame env2)))))
+                                     return break continue throw)))))))
+
+(define body
+  (lambda (statement)
+    (caddr statement)))
+
+(define statement-into-block
+  (lambda (statement)
+    (cons 'begin statement)))
+
+(define try-into-block
+  (lambda (try)
+    (statement-into-block try)))
+
+(define except-into-block
+  (lambda (except)
+    (statement-into-block except)))
+
+(define finally-into-block
+  (lambda (finally)
+    (statement-into-block finally)))
+
 (define Mbreak
   (lambda (state break)
     (break state)))
@@ -379,7 +431,7 @@
 (define intexp?
   (lambda (expr state)
     (cond
-      ((number? expr) #t)
+      ((number? expr)           #t)
       ((and (box? expr) (number? (unbox expr))) #t)
       ((and (declared? expr state) (number? (MgetState expr state))) #t)
       [(not (list? expr))       #f]
@@ -394,9 +446,9 @@
 (define boolexp?
   (lambda (expr state)
     (cond
-      [(boolean? expr)     #t]
-      [(eq? 'true expr)    #t]
-      [(eq? 'false expr)   #t]
+      [(boolean? expr)           #t]
+      [(eq? 'true expr)          #t]
+      [(eq? 'false expr)         #t]
       [(and (declared? expr state) (boolean? (MgetState expr state))) #t]
       [(not (list? expr))        #f]
       [(eq? (operator expr) '&&) #t]
