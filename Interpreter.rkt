@@ -9,6 +9,7 @@
 ;Basic Interpreter
 #lang racket
 
+(require rackunit)
 (require "simpleParser.rkt")
 
 ;;;; ***************************************************
@@ -516,7 +517,10 @@
     (cond
         [(zero? i)                                       #t]
         [else      (begin (run-tests (- i 1))
+                          (displayln"/////////////////////////////////////////////////////////")
                           (displayln (string-append "Executing Test " (format "~a" i)))
+                          (displayln "no output: test passed! if error, it is thrown below:")
+                          (displayln" ")
                           (let* ([test-file (format "tests2/test~a.txt" i)]
                                  [expected-output (with-input-from-file (format "tests2/test~a-output.txt" i) read)])
                              (check-equal? (interpret (parser test-file)) expected-output)))])))
