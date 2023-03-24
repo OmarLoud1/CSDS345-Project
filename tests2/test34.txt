@@ -1,0 +1,8 @@
+var x = 1;
+try {
+    x = x + 1;
+    throw 10;
+} catch (e) {
+    var y = e;
+}
+return y;

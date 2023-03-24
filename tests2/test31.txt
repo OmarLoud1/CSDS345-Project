@@ -1,0 +1,9 @@
+var x = 0;
+try {
+    x = 50;
+} catch (e) {
+    x = 0;
+} finally {
+    x = x * 2;
+}
+return x;

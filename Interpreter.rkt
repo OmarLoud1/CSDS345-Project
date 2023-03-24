@@ -13,7 +13,9 @@
 (require "simpleParser.rkt")
 
 ;;;; ***************************************************
+
 ;Helper functions to parse the lists of expressions
+
 ;;;; ***************************************************
 
 ; abstraction to create new 
@@ -124,7 +126,9 @@
 
 
 ;;;; ***************************************************
+
 ; Auxiliary helper methods from class
+
 ;;;; ***************************************************
 
 ; tests if two expressions are not equal
@@ -183,7 +187,9 @@
       (cons (newframe) state)))
 
 ;;;; ***************************************************
+
 ; Main functions to parse the statements
+
 ;;;; ***************************************************
 
 ; determines the type of statement and executes its function
@@ -503,6 +509,8 @@
                     (lambda (state) (error 'unknownop "No loop to continue"))
                     (lambda (exception state)
                       (error 'unknownop (string-append "Uncaught exception thrown: " (format "~a" exception)))))))))
+
+
     
 ;;;; ***************************************************
 ;;;; ***************************************************
@@ -525,7 +533,7 @@
                                  [expected-output (with-input-from-file (format "tests2/test~a-output.txt" i) read)])
                              (check-equal? (interpret (parser test-file)) expected-output)))])))
 
-(run-tests 19)
+(run-tests 36)
 
 
 

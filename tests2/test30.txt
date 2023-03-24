@@ -1,0 +1,10 @@
+var x = 0;
+try {
+    x = 10;
+        throw 20;
+} catch (e) {
+x = x + e;
+} finally {
+    x = x + 0;
+}
+return x;
