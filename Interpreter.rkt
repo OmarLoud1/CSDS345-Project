@@ -185,9 +185,9 @@
     (cond
       [(or (null? (vals layer)) (null? (vars layer)))                              (error 'gStateError "There was a problem finding that variable.")]
       [(and (eq? varName (car (vars layer))) (eq? '$null$ (car (vals layer))))   (error 'gStateError "This variable has not been assigned a value.")]
-      [(eq? varName (car (vars layer)))                                                                                   (unbox (car (value layer)))]
-      [(not (eq? varName (car (vars layer))))                                  (MgetState varName (list (cdr (vars layer)) (cdr (vals layer))))]
-      [else                                                                                  (error 'gStateError "There was a problem finding that variable.")])))  
+      [(eq? varName (car (vars layer)))                                                                                  (unbox (car (value layer)))]
+      [(not (eq? varName (car (vars layer))))                                       (MgetState varName (list (cdr (vars layer)) (cdr (vals layer))))]
+      [else                                                                        (error 'gStateError "There was a problem finding that variable.")])))  
 
 
 ; delares a variable
@@ -313,16 +313,17 @@
 
 (define addFrame
   (lambda (state)
-    (cond
-      [(null? state) (list newframe)]
-      [else          (cons (car state) state)]
+      (cons (newframe) state)
     )
   )
 )
 
 (define popFrame
   (lambda (state)
-    (cdr state)
+    (cond 
+      [(null? state)   (error "Something went very wrong holy fuck we ran out of layers in the state")]
+      [else            (cdr state)]
+    )
   )
 )
 
@@ -377,6 +378,8 @@
 
       (else #f))))
 
+
+
 ;;;; ***************************************************
 
 ;;;; *̵͖̻͋̓͑͜*̸̫͔̽̾͐͜*̴̡̦͋͝͠*̵̢̼͛͊̕͜*̵̡̺͇̐̐͘*̵͓̫̦͋͝͝*̸͇̦͓̓͑̚*̴̦̪͓͘͘̕*̵͔͉͉͑́͝*̸͉̫̻͆͑͝*̵͔͚̐̀̈́*̸̦͓͇̽͊*̴͓̪͚̚̚͠*̸̙̻̘̾͐*̸̡̠̒͜͝͠*̵̟̘̼̾́̓*̵͕͍͎͆̚*̸͎̠̾̾͐*̸̠͓͔̈́̿͝*̵͖͍͉͝͝͝*̸̦͖̟̒͆͒*̵͎͙̫͋̔̓*̵̻͔̾̈́͜͠*̸̡͖̦͛̾͝*̸͕̦̠͐̿̈́*̸͎̙̓̕*̵͉̪̓̈́̕*̸̫̪̘̾͋*̸̠̦́͠*̴̡̞͉͋̀̕*̵̢̪̺́͐*̸͙͚̺̕͘͠*̵̻͕͍͆̔̕*̴̞̠͚̔̚*̴̦͙̠͐͋̀*̴͕͉̫̒̈́̿*̴̙̞̺͆͋̾*̵͕̝̒͋*̵̡͙͋͐̚*̵̞̞̻͑̽͒*̴̦͓͌͐͊*̸̺̪̈́̓͘*̵͚͚̙͆͌͒*̴̢͔͉͐͐͝*̸͇̙͊̀͘͜*̸̠͙͌͝͝*̸͎̦̈́̔͋*̵͇͍̻̓̈́͛*̴̟̪͐͜͠͝*̵̢͍̓͐̓͜*̵̞̪̿͛͑
@@ -384,8 +387,6 @@
 ; Main method
 
 ;;;; *̵͖̻͋̓͑͜*̸̫͔̽̾͐͜*̴̡̦͋͝͠*̵̢̼͛͊̕͜*̵̡̺͇̐̐͘*̵͓̫̦͋͝͝*̸͇̦͓̓͑̚*̴̦̪͓͘͘̕*̵͔͉͉͑́͝*̸͉̫̻͆͑͝*̵͔͚̐̀̈́*̸̦͓͇̽͊*̴͓̪͚̚̚͠*̸̙̻̘̾͐*̸̡̠̒͜͝͠*̵̟̘̼̾́̓*̵͕͍͎͆̚*̸͎̠̾̾͐*̸̠͓͔̈́̿͝*̵͖͍͉͝͝͝*̸̦͖̟̒͆͒*̵͎͙̫͋̔̓*̵̻͔̾̈́͜͠*̸̡͖̦͛̾͝*̸͕̦̠͐̿̈́*̸͎̙̓̕*̵͉̪̓̈́̕*̸̫̪̘̾͋*̸̠̦́͠*̴̡̞͉͋̀̕*̵̢̪̺́͐*̸͙͚̺̕͘͠*̵̻͕͍͆̔̕*̴̞̠͚̔̚*̴̦͙̠͐͋̀*̴͕͉̫̒̈́̿*̴̙̞̺͆͋̾*̵͕̝̒͋*̵̡͙͋͐̚*̵̞̞̻͑̽͒*̴̦͓͌͐͊*̸̺̪̈́̓͘*̵͚͚̙͆͌͒*̴̢͔͉͐͐͝*̸͇̙͊̀͘͜*̸̠͙͌͝͝*̸͎̦̈́̔͋*̵͇͍̻̓̈́͛*̴̟̪͐͜͠͝*̵̢͍̓͐̓͜*̵̞̪̿͛͑
-
-
 
 (define interpret
   (lambda (expr)
