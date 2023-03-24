@@ -162,6 +162,23 @@
       ((eq? x (car list)) #t)
       (else (contains? x (cdr list))))))
 
+; checks if a variable is declared
+(define declared?
+  (lambda (var state)
+    (cond
+      [(null? state)    #f]
+      [else (or (member? var (stateVars state)) (declared? var (cdr state)))])))
+
+; updates the value within the box
+(define set-box
+  (lambda (box val)
+    (begin (set-box! box val) box)))
+
+; adds a frame when begin is called
+(define addFrame
+  (lambda (state)
+      (cons (newframe) state)))
+
 ;;;; ***************************************************
 ; Main functions to parse the statements
 ;;;; ***************************************************
@@ -267,7 +284,7 @@
                                                         (lambda (state2) (break (Mwhile condition expr state2 return throw))) throw) return throw)]
         [else                                                                                                                           state])))))
 
-; 
+; handles the try block
 (define Mtry
   (lambda (try except finally state return break continue throw)
     (call/cc
@@ -281,7 +298,7 @@
                                       (except-continuation except finally state return break continue throw jump (finally-into-block finally)))
                           return break continue throw)))))
 
-
+; creates the exception continuation for Mtry
 (define except-continuation
   (lambda (except finally state return break continue throw jump finally-block)
     (cond
@@ -329,6 +346,7 @@
       [(eq? (operator expr) 'throw)                                                                   (throw (operand expr) state)]
       [else                                                                                  (error 'unknownop "Bad Statement")])))
       
+;updates the state instead of deleting and adding again
 (define Mupdate
   (lambda (varName val state)
     (cond
@@ -346,28 +364,17 @@
       [(not (eq? varName (car (vars layer))))                               (Mupdate_layer varName val (list (cdr (vars layer)) (cdr (vals layer))))]
       [else                                                                        (error 'gStateError "There was a problem finding that variable.")])))  
 
-
+; helper that calls break
 (define Mbreak
   (lambda (state break)
     (break state)))
 
+; helper that calls continue
 (define Mcontinue
   (lambda (state continue)
     (continue state)))
 
-; checks if a variable is declared
-(define declared?
-  (lambda (var state)
-    (cond
-      [(null? state)    #f]
-      [else (or (member? var (stateVars state)) (declared? var (cdr state)))])))
-
-
-(define set-box
-  (lambda (box val)
-    (begin (set-box! box val) box)))
-
-
+; enters the begin statement and defines the break continue and throw 
 (define Mbegin
   (lambda (expr-list state return break continue throw)
     (popFrame (MstateList expr-list (addFrame state) return
@@ -407,10 +414,8 @@
                                                (StateUpdate (list (cdr (vars declared)) (cdr (vals declared))) state))]
       [else                                                             (addState declared (removevar declared state))])))
 
-(define addFrame
-  (lambda (state)
-      (cons (newframe) state)))
 
+; returns the current frame
 (define popFrame
   (lambda (state)
     (cond 
@@ -478,7 +483,7 @@
 ;;;; ***************************************************
 ;;;; ***************************************************
 
-
+; the main method that runs out interpreter on the parsed code and outputs the result
 (define interpret
   (lambda (expr)
     (call/cc
