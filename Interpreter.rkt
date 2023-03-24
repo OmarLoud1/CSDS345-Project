@@ -259,9 +259,10 @@
 (define Mval
   (lambda (expr state)
     (cond
-     [(boolexp? expr state)                   (Mbool expr state)]
-     [(intexp? expr state)                 (Minteger expr state)]
-     [else               (error 'gStateError "Value Unknown")])))
+     [(boolexp? expr state)                                                     (Mbool expr state)]
+     [(intexp? expr state)                                                   (Minteger expr state)]
+     [else               (error 'gStateError
+                                (string-append "Variable not declared: " (symbol->string expr)))])))
   
 
 
@@ -491,10 +492,11 @@
         (MstateList expr (newstate) return
                     (lambda (state) (error 'unknownop "No loop to break out of"))
                     (lambda (state) (error 'unknownop "No loop to continue"))
-                    (lambda (exception state) (error 'unknownop "Uncaught exception thrown")))))))
+                    (lambda (exception state)
+                      (error 'unknownop (string-append "Uncaught exception thrown: " (format "~a" exception)))))))))
     
 
-(interpret (parser "tests2/test5.txt"))
+(interpret (parser "tests2/test19.txt"))
 
 
 
