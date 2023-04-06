@@ -409,26 +409,21 @@
   (lambda (declared state)
     (cond
       [(and (eq? (vals declared) "true") (neq? (vars declared) 'return))    (list (list (cons (vars declared) (stateVars state))
-                                                                                (cons (box #t) (stateVals state))) (cdr state))]
-
+                                                                                  (cons (box #t) (stateVals state))) (cdr state))]
       [(and (eq? (vals declared) "false") (neq? (vars declared) 'return))   (list (list (cons (vars declared) (stateVars state))
-
-                                                                                (cons (box #f) (stateVals state))) (cdr state))]
-
-      [else                                                                (cons  (list (cons (vars declared) (stateVars state))
-                                                                                 (cons (box (vals declared)) (stateVals state)))
-                                                                                                                (cdr state))])))
+                                                                                  (cons (box #f) (stateVals state))) (cdr state))]
+      [else                                                          (cons  (list (cons (vars declared) (stateVars state))
+                                                                                  (cons (box (vals declared)) (stateVals state)))
+                                                                                                                     (cdr state))])))
 
 ; updates status given a declared variable
 (define StateUpdate
   (lambda (declared state)
     (cond
       [(or (null? declared) (null? (car declared)))                                                              state]
-
       [(list? (vars declared))                 (StateUpdate (list (car (vars declared)) (car (vals declared)))
                                                (StateUpdate (list (cdr (vars declared)) (cdr (vals declared))) state))]
-
-      [else                                                          (addState declared (removevar declared state))])))
+      [else                                                             (addState declared (removevar declared state))])))
 
 
 ; returns the current frame
