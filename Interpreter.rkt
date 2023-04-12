@@ -212,7 +212,7 @@
       [(eq? (operator expr) 'funcall)                                                       (Mfunc-state expr state return break continue throw)]
       [(eq? (operator expr) 'return)                                                  (Mreturn (operand expr) state return break continue throw)]
       [(eq? (operator expr) 'var)                                                        (Mdeclare (leftoperand expr) (rightoperand expr) state)]
-      [(eq? (operator expr) '=)                                              (Mupdate (leftoperand expr) (Mval (rightoperand expr) state) state)]
+      [(eq? (operator expr) '=)                                              (Mupdate (leftoperand expr) (Mval (rightoperand expr) state) state throw)]
       [(eq? (operator expr) 'if)                   (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
       [(eq? (operator expr) 'while)                                           (Mwhile (leftoperand expr) (rightoperand expr) state return throw)]
       [(eq? (operator expr) 'break)                                                                                         (Mbreak state break)]
@@ -267,7 +267,20 @@
       [(null? (cdr state))              (car state)]
       [else                (outerLayer (cdr state))])))
 
-
+(define MfuncVal  
+  (lambda (expr state throw)
+    (call/cc
+      (lambda (return)
+        (if (not (eq? (length (operator (MgetState (operand expr) state))) (length (closure-params expr))))
+        
+            (myerror "Error: mismatched-number-of-parameters")
+            
+            (MstateList (closure-body (MgetState (operand expr) state))
+              (assign-parameters (operator (MgetState (operand expr) state)) (get-argument-list statement)
+                (addFrame ((closure-state (MgetState (operand expr) state)) state)) state throw)
+              return
+              (lambda (s) ('error "break-out-of-loop"))
+              (lambda (s) ('error "no-return-statement")) throw))))))
 
 (define Mfunc-state  
   (lambda (expr state return break continue throw)
@@ -320,8 +333,8 @@
       [(eq? (operator expr) '&&) (and      (Mbool    (leftoperand expr) state) (Mbool    (rightoperand expr) state))]
       [(eq? (operator expr) '||) (or       (Mbool    (leftoperand expr) state) (Mbool    (rightoperand expr) state))]
       [(eq? (operator expr) '!)  (not                                          (Mbool     (leftoperand expr) state))]
-      [(eq? (operator expr) '==) (eq?      (Mval (leftoperand expr) state)         (Mval (rightoperand expr) state))]
-      [(eq? (operator expr) '!=) (neq?     (Mval (leftoperand expr) state)         (Mval (rightoperand expr) state))]
+      [(eq? (operator expr) '==) (eq?      (Mval (leftoperand expr) state throw)         (Mval (rightoperand expr) state) throw)]
+      [(eq? (operator expr) '!=) (neq?     (Mval (leftoperand expr) state throw)         (Mval (rightoperand expr) state) throw)]
       [(eq? (operator expr) '<)  (<        (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
       [(eq? (operator expr) '>)  (>        (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
       [(eq? (operator expr) '<=) (<=       (Minteger (leftoperand expr) state) (Minteger (rightoperand expr) state))]
@@ -353,23 +366,24 @@
   (lambda (var val state)
     (if (null? val)
         (StateUpdate (list var '$null$) state)
-        (StateUpdate (list var (Mval val state)) state))))
+        (StateUpdate (list var (Mval val state throw)) state))))
 
 
 ; assigns a value to a variable
 (define Massign
   (lambda (var val state)
     (if (declared? var state)
-      (StateUpdate (list var (Mval val state)) state)
+      (StateUpdate (list var (Mval val state throw)) state)
       (error 'gStateError "The variable was not declared."))))
 
 
 ;check either boolean or integer
 (define Mval
-  (lambda (expr state)
+  (lambda (expr state throw)
     (cond
      [(boolexp? expr state)                                                     (Mbool expr state)]
      [(intexp? expr state)                                                   (Minteger expr state)]
+     [(eq? 'funcall (operator expr))    (MfuncVal expr state throw)]
      [else               (error 'gStateError
                                 (string-append "Variable not declared: " (symbol->string expr)))])))
   
@@ -435,7 +449,7 @@
     (cond
       [(eq? (Mval expr state) #t)               (return "true")]
       [(eq? (Mval expr state) #f)              (return "false")]
-      [else                          (return (Mval expr state))])))
+      [else                          (return (Mval expr state throw))])))
 
 
 ;updates the state instead of deleting and adding again
