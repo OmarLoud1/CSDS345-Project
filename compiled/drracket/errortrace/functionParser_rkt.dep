@@ -1,0 +1,1 @@
+("8.7" tarm64osx ("a2565e41d2fc4c4c52506edb025b441c51112632" . "f59e56df8011e0637a79c0dd87137ea17d57844a") #"/Users/omar/Library/Mobile Documents/com~apple~CloudDocs/Classes/345/CSDS345-Project/lex.rkt" (collects #"drracket" #"private" #"drracket-errortrace-key.rkt") (collects #"racket" #"main.rkt") (collects #"racket" #"runtime-config.rkt"))
