@@ -153,6 +153,16 @@
       ((eq? x (car list))       #t)
       (else (member? x (cdr list))))))
 
+; checkss if a variable is inside a list (possibly a list of lists)
+(define member?*
+  (lambda (a list)
+    (cond 
+      ((null? list)                                           #f)
+      ((list? (car list))
+             (or (member?* a (car list))(member?* a (cdr list))))
+      ((eq? a (car list))                                     #t)
+      (else                              (member?* a (cdr list))))))
+
 ; replaces a variable with a value in a list
 (define replace
   (lambda (x y lis)
@@ -205,32 +215,34 @@
 (define Mstate
   (lambda (expr state return break continue throw)
     (cond
-      [(null? expr)                                                                                                                        state]
-      [(intexp? expr state)                                                                                                (Minteger expr state)]
-      [(boolexp? expr state)                                                                                                  (Mbool expr state)]
-      [(eq? (operator expr) 'function)      (Mfunc-definition (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
-      [(eq? (operator expr) 'funcall)                                                       (Mfunc-state expr state return break continue throw)]
-      [(eq? (operator expr) 'return)                                                  (Mreturn (operand expr) state return break continue throw)]
-      [(eq? (operator expr) 'var)                                                        (Mdeclare (leftoperand expr) (rightoperand expr) state)]
-      [(eq? (operator expr) '=)                                              (Mupdate (leftoperand expr) (Mval (rightoperand expr) state) state throw)]
-      [(eq? (operator expr) 'if)                   (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
-      [(eq? (operator expr) 'while)                                           (Mwhile (leftoperand expr) (rightoperand expr) state return throw)]
-      [(eq? (operator expr) 'break)                                                                                         (Mbreak state break)]
-      [(eq? (operator expr) 'continue)                                                                                (Mcontinue state continue)]
-      [(eq? (operator expr) 'begin)                                                       (Mbegin (args expr) state return break continue throw)]
-      [(eq? (operator expr) 'try)                 (Mtry (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
-      [(eq? (operator expr) 'throw)                                                                                 (throw (operand expr) state)]
-      [else                                                                                                   (error 'unknownop "Bad Statement")])))
+      [(null? expr)                                                                                                           state]
+      [(intexp? expr state)                                                                                   (Minteger expr state)]
+      [(boolexp? expr state)                                                                                     (Mbool expr state)]
+      [(eq? (operator expr) 'function)                        (Mfunc-definition (modifiers expr) state return break continue throw)]
+      [(eq? (operator expr) 'funcall)                                          (Mfunc-state expr state return break continue throw)]
+      [(eq? (operator expr) 'return)                                     (Mreturn (operand expr) state return break continue throw)]
+      [(eq? (operator expr) 'var)                                           (Mdeclare (leftoperand expr) (rightoperand expr) state)]
+      [(eq? (operator expr) '=)                           (Mupdate (leftoperand expr) (Mval (rightoperand expr) state) state throw)]
+      [(eq? (operator expr) 'if)      (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
+      [(eq? (operator expr) 'while)                              (Mwhile (leftoperand expr) (rightoperand expr) state return throw)]
+      [(eq? (operator expr) 'break)                                                                            (Mbreak state break)]
+      [(eq? (operator expr) 'continue)                                                                   (Mcontinue state continue)]
+      [(eq? (operator expr) 'begin)                                          (Mbegin (args expr) state return break continue throw)]
+      [(eq? (operator expr) 'try)    (Mtry (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
+      [(eq? (operator expr) 'throw)                                                                    (throw (operand expr) state)]
+      [else                                                                                      (error 'unknownop "Bad Statement")])))
 
-
+(define modifiers
+  (lambda (expr)
+    (cdr expr)))
 
 (define Mfunc-definition
-  (lambda (name params block state return break continue throw)
-    (Mdeclare name (function-closure params block state) state)))
+  (lambda (expr state return break continue throw)
+    (Mdeclare (operandn 1 expr) (function-closure expr state) state)))
  
 (define function-closure
-  (lambda (params block state)
-    (list params block (lambda (env) (function-env expr (outerLayerVars env) env)))))
+  (lambda (expr state)
+    (list (operandn 2 expr) (operandn 3 expr) (lambda (env) (function-env expr (outerLayerVars env) env)))))
 
 (define function-env
   (lambda (expr outerVars state)
@@ -239,7 +251,7 @@
       [(or (number? (unbox (get-closure outerVars))) (eq? (length (unbox (get-closure outerVars))))) 
         (function-env expr (deepState outerVars) state)]
       [(member?* 'function (get-closure-body (unbox (get-closure outerVars)))) state]
-      [else    (function-env statement (deepState outerVars) state)])))
+      [else    (function-env expr (deepState outerVars) state)])))
 
 (define get-closure-environment 
   (lambda (state)
@@ -259,7 +271,7 @@
 
 (define outerLayerVars
   (lambda (state)
-    (StateVars (outerLayers state))))
+    (stateVars (outerLayer state))))
 
 (define outerLayer
   (lambda (state)
@@ -267,13 +279,17 @@
       [(null? (cdr state))              (car state)]
       [else                (outerLayer (cdr state))])))
 
+(define get-argument-list
+  (lambda (expr)
+    (cddr expr)))
+
 (define MfuncVal  
   (lambda (expr state throw)
     (call/cc
       (lambda (return)
         (if (not (eq? (length (operator (MgetState (operand expr) state))) (length (closure-params expr))))
         
-            (myerror "Error: mismatched-number-of-parameters")
+            ('error "Error: mismatched-number-of-parameters")
             
             (MstateList (closure-body (MgetState (operand expr) state))
               (assign-parameters (operator (MgetState (operand expr) state)) (get-argument-list statement)
