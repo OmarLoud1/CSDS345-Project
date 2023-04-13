@@ -292,7 +292,7 @@
             ('error "Error: mismatched-number-of-parameters")
             
             (MstateList (closure-body (MgetState (operand expr) state))
-              (assign-parameters (operator (MgetState (operand expr) state)) (get-argument-list statement)
+              (assign-parameters (operator (MgetState (operand expr) state)) (get-argument-list expr)
                 (addFrame ((closure-state (MgetState (operand expr) state)) state)) state throw)
               return
               (lambda (s) ('error "break-out-of-loop"))
@@ -302,10 +302,10 @@
   (lambda (expr state return break continue throw)
     (if (not (eq? (length (operator (MgetState (operand expr) state))) (length (closure-params expr))))
     
-        (myerror "Error: mismatched-number-of-parameters")
+        ('error "Error: mismatched-number-of-parameters")
         
         (MstateList (closure-body (MgetState (operand expr) state))
-           (assign-parameters (operator (MgetState (operand expr) state)) (get-argument-list statement)
+           (assign-parameters (operator (MgetState (operand expr) state)) (get-argument-list expr)
              (addFrame ((closure-state (MgetState (operand expr) state)) state)) state throw)
            (lambda (v) state) 
            (lambda (s) ('error "break-out-of-loop"))
