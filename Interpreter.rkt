@@ -576,7 +576,35 @@
       [(eq? (operator expr) '>=)                                         #t]
       (else                                                              #f))))
 
+(define handle-expr-list
+  (lambda (expr-list state return break continue throw init-expr-list)
+    (if (null? expr-list)
+        (handle-main init-expr-list state return break continue throw)
+        (handle-expr-list 
+          (cdr expr-list)
+          (handle-expr (caar expr-list) state return break continue throw init-expr-list)
+          return break continue throw init-expr-list))))
 
+(define handle-main
+  (lambda (expr-list state return break continue throw)
+    (cond
+      [(null? expr-list)                                                                                                                                    (error "There was a problem handeling a function.")]
+      [(and (eq? (cadar expr-list) 'main) (eq? (caar expr-list) 'function))                                            (handle-expr-list (car (cdddar expr-list)) (addFrame state) return break continue throw)]
+      [else                                                                                                                                     (handle-main (cdr expr-list) state return break continue throw)]
+    )
+  )
+)
+
+(define handle-expr
+  (lambda (expr state return break continue throw init-expr-list)
+    (cond
+      [(eq? 'function (caar expr))                                       (Mfunc-definition (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
+      [(eq? '= (statement-type statement))                                                                                                  (Massign (vars expr) (vals expr) state)]
+      [(eq? 'var (statement-type statement))                                                                                               (Mdeclare (vars expr) (vals expr) state)]
+      [else (errror "There was a problem handeling a function.")]
+    )
+  )
+)
 
 ;;;; ***************************************************
 ;;;; ***************************************************
