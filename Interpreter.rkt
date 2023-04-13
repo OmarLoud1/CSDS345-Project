@@ -614,9 +614,9 @@
 (define handle-expr
   (lambda (expr state return break continue throw init-expr-list)
     (cond
-      [(eq? 'function (caar expr))                                       (Mfunc-definition (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
-      [(eq? '= (statement-type statement))                                                                                                  (Massign (vars expr) (vals expr) state throw)]
-      [(eq? 'var (statement-type statement))                                                                                               (Mdeclare (vars expr) (vals expr) state throw)]
+      [(eq? 'function (operator expr))                                       (Mfunc-definition (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
+      [(eq? '= (operator expr))                                                                                                  (Massign (vars expr) (vals expr) state throw)]
+      [(eq? 'var (operator expr))                                                                                               (Mdeclare (vars expr) (vals expr) state throw)]
       [else ('error "There was a problem handling a function.")]
     )
   )
