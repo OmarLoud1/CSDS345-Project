@@ -299,29 +299,21 @@
   (lambda (expr state throw)
     (call/cc
       (lambda (return)
-        (if (not (eq? (length (leftoperand (MgetState (operator expr) state))) (length (modifiers expr))))
-        
-            ('error "Error: mismatched-number-of-parameters")
-            
-            (MstateList (closure-body (MgetState (operator expr) state))
-              (assign-parameters (modifiers (MgetState (operator expr) state)) (modifiers expr)
-                (addFrame ((closure-state (MgetState (operator expr) state)) state)) state throw)
-              return
-              (lambda (s) ('error "break-out-of-loop"))
-              (lambda (s) ('error "no-return-statement")) throw))))))
+        (MfuncExecute expr state return (lambda (s) ('error "break-out-of-loop")) (lambda (s) ('error "no-continue-statement")) throw)))))
 
 (define Mfunc-state  
   (lambda (expr state return break continue throw)
-    (if (not (eq? (length (modifiers (MgetState (operator expr) state))) (length (modifiers expr))))
+    (MfuncExecute expr state (lambda (v) state) (lambda (s) ('error "break-out-of-loop")) (lambda (s) (continue s)) throw)))
     
+
+(define MfuncExecute
+  (lambda (expr state return break continue throw)
+    (if (not (eq? (length (modifiers (MgetState (operator expr) state))) (length (modifiers expr))))
         ('error "Error: mismatched-number-of-parameters")
-        
         (MstateList (closure-body (MgetState (operator expr) state))
            (assign-parameters (modifiers (MgetState (operator expr) state)) (modifiers expr)
              (addFrame ((closure-state (MgetState (operator expr) state)) state)) state throw)
-           (lambda (v) state) 
-           (lambda (s) ('error "break-out-of-loop"))
-           (lambda (s) (continue s) throw)))))
+           return break continue throw))))
 
 
 (define assign-parameters
