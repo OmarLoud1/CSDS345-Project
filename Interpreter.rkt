@@ -282,7 +282,7 @@
       [(eq? (operator expr) 'continue)                                                                   (Mcontinue state continue)]
       [(eq? (operator expr) 'begin)                                          (Mbegin (args expr) state return break continue throw)]
       [(eq? (operator expr) 'try)    (Mtry (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
-      [(eq? (operator expr) 'throw)                                                                    (throw (operand expr) state)]
+      [(eq? (operator expr) 'throw)                                                 (throw (Mval (operand expr) state throw) state)]
       [else                                                                                      (error 'unknownop "Bad Statement")])))
 
 (define Mfunc-definition
@@ -581,7 +581,7 @@
 (define popFrame
   (lambda (state)
     (cond 
-      [(null? state)   (error "Something went very wrong we ran out of layers in the state")]
+      [(null? state)         state]
       [else            (cdr state)])))
 
  ; cps helper function for remove  
@@ -683,7 +683,7 @@
 ;;; (run-tests 41)
 
 
-(interpret (parser "tests3/test19.txt"))
+(interpret (parser "tests3/test20.txt"))
 
 
 
