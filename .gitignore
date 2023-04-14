@@ -11,4 +11,8 @@ compiled/drracket/errortrace/Interpreter_rkt.dep
 \#Interpreter.rkt\#3\#
 \#Interpreter.rkt\#2\#
 .DS_Store
+
+compiled/drracket/errortrace/functionParser_rkt.dep
+compiled/drracket/errortrace/functionParser_rkt.zo
 part3.rkt
+
