@@ -700,11 +700,7 @@
 (run-tests 20)
 
 
-<<<<<<< Updated upstream
-(interpret (parser "tests3/test4.txt"))
-=======
 ; (interpret (parser "tests3/test20.txt"))
->>>>>>> Stashed changes
 
 
 
