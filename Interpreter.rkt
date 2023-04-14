@@ -683,24 +683,28 @@
 
 ;;;; ***************************************************
 ;;;; ***************************************************
-;;
-;;; (define run-tests
-;;;   (lambda (i)
-;;;     (cond
-;;;         [(zero? i)                                       #t]
-;;;         [else      (begin (run-tests (- i 1))
-;;;                           (displayln"/////////////////////////////////////////////////////////")
-;;;                           (displayln (string-append "Executing Test " (format "~a" i)))
-;;;                           (displayln "no output: test passed! if error, it is thrown below:")
-;;;                           (displayln" ")
-;;;                           (let* ([test-file (format "tests2/test~a.txt" i)]
-;;;                                  [expected-output (with-input-from-file (format "tests2/test~a-output.txt" i) read)])
-;;;                              (check-equal? (interpret (parser test-file)) expected-output)))])))
 
-;;; (run-tests 41)
+(define run-tests
+  (lambda (i)
+    (cond
+        [(zero? i)                                       #t]
+        [else      (begin (run-tests (- i 1))
+                          (displayln"/////////////////////////////////////////////////////////")
+                          (displayln (string-append "Executing Test " (format "~a" i)))
+                          (displayln "no output: test passed! if error, it is thrown below:")
+                          (displayln" ")
+                          (let* ([test-file (format "tests3/test~a.txt" i)]
+                                 [expected-output (with-input-from-file (format "tests3/test~a-output.txt" i) read)])
+                             (check-equal? (interpret (parser test-file)) expected-output)))])))
+
+(run-tests 20)
 
 
+<<<<<<< Updated upstream
 (interpret (parser "tests3/test4.txt"))
+=======
+; (interpret (parser "tests3/test20.txt"))
+>>>>>>> Stashed changes
 
 
 
