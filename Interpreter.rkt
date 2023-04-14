@@ -150,7 +150,7 @@
 
 (define outerLayerVars
   (lambda (state)
-    (stateVars (outerLayer state))))
+    (cadr (outerLayer state))))
 
 (define outerLayer
   (lambda (state)
@@ -174,9 +174,17 @@
   (lambda (expr-list)
     (car expr-list)))
 
+(define funcall-params
+  (lambda (l)
+    (cddr l)))
+
 (define closure-body cadr)
 (define closure-state caddr)
-(define closure-params cddr)
+(define closure-params car)
+
+(define funcargs
+  (lambda (list)
+    (cdr (cdr list))))
 
 
 ;;;; ***************************************************
@@ -263,7 +271,7 @@
       [(null? expr)                                                                                                           state]
       [(intexp? expr state)                                                                             (Minteger expr state throw)]
       [(boolexp? expr state)                                                                               (Mbool expr state throw)]
-      [(eq? (operator expr) 'function)                        (Mfunc-definition (modifiers expr) state return break continue throw)]
+      [(eq? (operator expr) 'function)                                    (Mfunc-definition expr state return break continue throw)]
       [(eq? (operator expr) 'funcall)                                          (Mfunc-state expr state return break continue throw)]
       [(eq? (operator expr) 'return)                                     (Mreturn (operand expr) state return break continue throw)]
       [(eq? (operator expr) 'var)                                     (Mdeclare (leftoperand expr) (rightoperand expr) state throw)]
@@ -279,17 +287,17 @@
 
 (define Mfunc-definition
   (lambda (expr state return break continue throw)
-    (Mdeclare (operator expr) (function-closure expr state) state throw)))
+    (Mdeclare (operand expr) (function-closure expr state) state throw)))
  
 (define function-closure
   (lambda (expr state)
-    (list 'func (operandn 1 expr) (operandn 2 expr) (lambda (env) (function-env expr (outerLayerVars env) env)))))
+    (list (operandn 2 expr) (operandn 3 expr) (lambda (env) (function-env expr (outerLayerVars env) env)))))
 
 (define function-env
   (lambda (expr outerVars state)
     (cond
       [(null? outerVars) (list (outerLayer state))]
-      [(or (number? (unbox (get-closure outerVars))) (eq? (length (unbox (get-closure outerVars))))) 
+      [(or (number? (unbox (get-closure outerVars))) (eq? (length (unbox (get-closure outerVars))) 1)) 
         (function-env expr (deepState outerVars) state)]
       [(member?* 'function (get-closure-body (unbox (get-closure outerVars)))) state]
       [else    (function-env expr (deepState outerVars) state)])))
@@ -308,12 +316,16 @@
 
 (define MfuncExecute
   (lambda (expr state return break continue throw)
-    (if (not (eq? (length (modifiers (MgetState (operator expr) state))) (length (modifiers expr))))
-        ('error "Error: mismatched-number-of-parameters")
-        (MstateList (closure-body (MgetState (operator expr) state))
-           (assign-parameters (modifiers (MgetState (operator expr) state)) (modifiers expr)
-             (addFrame ((closure-state (MgetState (operator expr) state)) state)) state throw)
-           return break continue throw))))
+    (let* ((closure (MgetState (operand expr) state))
+           (inner ((closure-state closure) state))
+           (middle (addFrame inner))
+           (outer
+            (assign-parameters (closure-params closure)
+                               (funcargs expr)
+                               middle state throw)))
+    (if (not (eq? (length (closure-params closure)) (length (funcall-params expr))))
+        ('error "Error: Wrong Number of Parameters")
+        (MstateList (closure-body closure) outer return break continue throw)))))
 
 
 (define assign-parameters
@@ -321,7 +333,7 @@
     (if (null? params)
         frame
         (assign-parameters (args params) (args arguments)
-                         (Mdeclare (parameters params) (Mval (args arguments) state throw) frame throw)
+                         (Mdeclare (firstExpr params) (Mval (firstExpr arguments) state throw) frame throw)
                          state throw))))
       
 
@@ -329,16 +341,16 @@
 (define Minteger
   (lambda (expr state throw)
     (cond
-      ((number? expr)                                                                                           expr)
-      ((box? expr)                                                                                      (unbox expr))
-      ((not (list? expr))                                                                     (MgetState expr state))
-      ((and (empty? (rightoperand expr)) (eq? (operator expr) '-))        (- 0  (Minteger (leftoperand expr) state throw)))
-      ((eq? (operator expr) '+) (+         (Minteger (leftoperand expr) state throw) (Minteger (rightoperand expr) state throw)))
-      ((eq? (operator expr) '-) (-         (Minteger (leftoperand expr) state throw) (Minteger (rightoperand expr) state throw)))
-      ((eq? (operator expr) '*) (*         (Minteger (leftoperand expr) state throw) (Minteger (rightoperand expr) state throw)))
-      ((eq? (operator expr) '/) (quotient  (Minteger (leftoperand expr) state throw) (Minteger (rightoperand expr) state throw)))
-      ((eq? (operator expr) '%) (remainder (Minteger (leftoperand expr) state throw) (Minteger (rightoperand expr) state throw)))
-      (else                                                                     (error 'unknownop "Bad Operator"))))) 
+      ((number? expr)                                                                                                     expr)
+      ((box? expr)                                                                                                 (unbox expr))
+      ((not (list? expr))                                                                                (MgetState expr state))
+      ((and (empty? (rightoperand expr)) (eq? (operator expr) '-))              (- 0  (Mval (leftoperand expr) state throw)))
+      ((eq? (operator expr) '+) (+         (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw)))
+      ((eq? (operator expr) '-) (-         (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw)))
+      ((eq? (operator expr) '*) (*         (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw)))
+      ((eq? (operator expr) '/) (quotient  (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw)))
+      ((eq? (operator expr) '%) (remainder (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw)))
+      (else                                                                                   (error 'unknownop "Bad Operator"))))) 
 
 
 
@@ -350,15 +362,15 @@
       [(eq? 'true expr)                                                                                           #t]
       [(eq? 'false expr)                                                                                          #f]
       [(not (list? expr))                                                                     (MgetState expr state)]
-      [(eq? (operator expr) '&&) (and      (Mbool    (leftoperand expr) state throw) (Mbool    (rightoperand expr) state throw))]
-      [(eq? (operator expr) '||) (or       (Mbool    (leftoperand expr) state throw) (Mbool    (rightoperand expr) state throw))]
-      [(eq? (operator expr) '!)  (not                                          (Mbool     (leftoperand expr) state throw))]
-      [(eq? (operator expr) '==) (eq?      (Mval (leftoperand expr) state throw)         (Mval (rightoperand expr) state) throw)]
-      [(eq? (operator expr) '!=) (neq?     (Mval (leftoperand expr) state throw)         (Mval (rightoperand expr) state) throw)]
-      [(eq? (operator expr) '<)  (<        (Minteger (leftoperand expr) state throw) (Minteger (rightoperand expr) state throw))]
-      [(eq? (operator expr) '>)  (>        (Minteger (leftoperand expr) state throw) (Minteger (rightoperand expr) state throw))]
-      [(eq? (operator expr) '<=) (<=       (Minteger (leftoperand expr) state throw) (Minteger (rightoperand expr) state throw))]
-      [(eq? (operator expr) '>=) (>=       (Minteger (leftoperand expr) state throw) (Minteger (rightoperand expr) state throw))]
+      [(eq? (operator expr) '&&) (and      (Mval    (leftoperand expr) state throw) (Mval    (rightoperand expr) state throw))]
+      [(eq? (operator expr) '||) (or       (Mval    (leftoperand expr) state throw) (Mval    (rightoperand expr) state throw))]
+      [(eq? (operator expr) '!)  (not                                          (Mval     (leftoperand expr) state throw))]
+      [(eq? (operator expr) '==) (eq?      (Mval (leftoperand expr) state throw)         (Mval (rightoperand expr) state throw))]
+      [(eq? (operator expr) '!=) (neq?     (Mval (leftoperand expr) state throw)         (Mval (rightoperand expr) state throw))]
+      [(eq? (operator expr) '<)  (<        (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw))]
+      [(eq? (operator expr) '>)  (>        (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw))]
+      [(eq? (operator expr) '<=) (<=       (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw))]
+      [(eq? (operator expr) '>=) (>=       (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw))]
       (else                                                                     (error 'unknownop "Bad Operator")))))
 
 ; Gets the state of the variable from state
@@ -401,10 +413,10 @@
 (define Mval
   (lambda (expr state throw)
     (cond
-     [(boolexp? expr state)                                                     (Mbool expr state throw)]
-     [(intexp? expr state)                                                   (Minteger expr state throw)]
-     [(eq? 'funcall (operator expr))                             (MfuncVal (modifiers expr) state throw)]
-     [(and (list? expr) (eq? 'func (operator expr)))                                                expr]
+     [(boolexp? expr state)                                    (Mbool expr state throw)]
+     [(intexp? expr state)                                  (Minteger expr state throw)]
+     [(eq? 'funcall (operator expr))                        (MfuncVal expr state throw)]
+     [(list? expr)                                              expr]
      [else          (error 'gStateError (string-append "Variable not declared: " (symbol->string expr)))])))
   
 
@@ -423,8 +435,8 @@
   (lambda (condition expr state return throw)
     (call/cc
       (lambda (break)
-        (cond  
-                              [(Mbool condition state throw) (Mwhile condition expr (Mstate expr state return break 
+        (cond
+          [(Mbool condition state throw) (Mwhile condition expr (Mstate expr state return break 
                                                         (lambda (state2) (break (Mwhile condition expr state2 return throw))) throw) return throw)]
 
         [else                                                                                                                           state])))))
@@ -528,7 +540,7 @@
 (define Mexpr-global
   (lambda (expr state return break continue throw init-expr-list)
     (cond
-      [(eq? 'function (operator expr))      (Mfunc-definition (modifiers expr) state return break continue throw)]
+      [(eq? 'function (operator expr))      (Mfunc-definition expr state return break continue throw)]
       [(eq? '= (operator expr))                      (Massign (leftoperand expr) (rightoperand expr) state throw)]
       [(eq? 'var (operator expr))                   (Mdeclare (leftoperand expr) (rightoperand expr) state throw)]
       [else                                                          ('error "Unknown Statement outside of Main")])))
@@ -669,9 +681,9 @@
 ;;;                              (check-equal? (interpret (parser test-file)) expected-output)))])))
 
 ;;; (run-tests 41)
-;;
 
-(interpret (parser "tests3/test4.txt"))
+
+(interpret (parser "tests3/test19.txt"))
 
 
 
