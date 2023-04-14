@@ -1,8 +1,8 @@
 ;;;; ***************************************************
 ;;;; Group 6: Omar Loudghiri(oxl51), Kyler Rosen(kkr33), Niels Sogaard(nks69)
 ;;;; CSDS 345 Spring 2023
-;;;; Project Part 2
-;;;; 03/24/2023
+;;;; Project Part 3
+;;;; 04/14/2023
 ;;;; ***************************************************
 
 
@@ -318,7 +318,7 @@
       [(or (number? (unbox (get-closure outerVars))) (eq? (length (unbox (get-closure outerVars))) 1)) 
                                                                                  (function-env expr (deepState outerVars) state)]
       [(member?* 'function (get-closure-body (unbox (get-closure outerVars))))                                             state]
-      [else (function-env expr (deepState outerVars)                                                                      state)])))
+      [else                                                                       (function-env expr (deepState outerVars) state)])))
 
 ; handles function calls from the parser 
 (define MfuncVal  
