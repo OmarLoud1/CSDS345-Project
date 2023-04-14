@@ -94,7 +94,7 @@
     (car (cdr (car state)))))
 
 ; retunrs the varibale from
-(define exception-var
+(define exceptionVar
   (lambda (statement)
     (car (car (cdr statement))))) 
 
@@ -104,26 +104,26 @@
     (caddr statement)))
 
 ; add a begin to a block statement, to reuse block code for try accept
-(define statement-into-block
+(define statementIntoBlock
   (lambda (statement)
     (cond
       [(null? statement) statement]
       [else  (cons 'begin (car (cdr statement)))])))
 
 ; adds a begin to a try statement, abstraction
-(define try-into-block
+(define tryIntoBlock
   (lambda (try)
     (cons 'begin try)))
 
 ;adds a begin to except block, abstraction
-(define except-into-block
+(define exceptIntoBlock
   (lambda (except)
-    (statement-into-block except)))
+    (statementIntoBlock except)))
 
 ; adds a begin to to a finally block
-(define finally-into-block
+(define finallyIntoBlock
   (lambda (finally)
-    (statement-into-block finally)))
+    (statementIntoBlock finally)))
 
 ; checks if a variable is initialized
 (define initialized?
@@ -135,23 +135,14 @@
   (lambda (state)
     (cdr state)))
 
-; (This isn't used outside of here)
-(define get-closure-environment 
-  (lambda (state)
-    (caddr state)))
-
-; (This isn't used outside of here)
-(define get-closure-formal-params 
-  (lambda (state)
-    (car state)))
 
 ; gets the closure body from state
-(define get-closure-body 
+(define getClosureBody 
   (lambda (state)
     (cadr state)))
 
 ; gets the closure function from state
-(define get-closure
+(define getClosure
   (lambda (state) 
     (car state)))
 
@@ -167,13 +158,9 @@
       [(null? (cdr state))              (car state)]
       [else                (outerLayer (cdr state))])))
 
-; (This isn't used outside of here)
-(define get-argument-list
-  (lambda (expr)
-    (cddr expr)))
 
 ; gets the main body from a given expression list
-(define main-body
+(define mainBody
   (lambda (expr-list)
     (car (cdddar expr-list))))
 
@@ -188,14 +175,9 @@
     (car expr-list)))
 
 ; returns the parameters of a function call
-(define funcall-params
+(define funcallParams
   (lambda (l)
     (cddr l)))
-
-; (These are all repeats of functions used above)
-(define closure-body cadr)
-(define closure-state caddr)
-(define closure-params car)
 
 ; gets the arguments for a function call
 (define funcargs
@@ -273,6 +255,7 @@
   (lambda (state)
       (cons (newframe) state)))
 
+      
 ;;;; ***************************************************
 
 ; Main functions to parse the statements
@@ -286,8 +269,8 @@
       [(null? expr)                                                                                                           state]
       [(intexp? expr state)                                                                             (Minteger expr state throw)]
       [(boolexp? expr state)                                                                               (Mbool expr state throw)]
-      [(eq? (operator expr) 'function)                                    (Mfunc-definition expr state return break continue throw)]
-      [(eq? (operator expr) 'funcall)                                          (Mfunc-state expr state return break continue throw)]
+      [(eq? (operator expr) 'function)                                    (MfuncDef expr state return break continue throw)]
+      [(eq? (operator expr) 'funcall)                                          (MfuncState expr state return break continue throw)]
       [(eq? (operator expr) 'return)                                     (Mreturn (operand expr) state return break continue throw)]
       [(eq? (operator expr) 'var)                                     (Mdeclare (leftoperand expr) (rightoperand expr) state throw)]
       [(eq? (operator expr) '=)                           (Mupdate (leftoperand expr) (Mval (rightoperand expr) state throw) state)]
@@ -300,61 +283,6 @@
       [(eq? (operator expr) 'throw)                                                 (throw (Mval (operand expr) state throw) state)]
       [else                                                                                      (error 'unknownop "Bad Statement")])))
 
-; This handles expressions that define functions
-(define Mfunc-definition
-  (lambda (expr state return break continue throw)
-    (Mdeclare (operand expr) (function-closure expr state) state throw)))
- 
-; Returns the closure function for a given expression
-(define function-closure
-  (lambda (expr state)
-    (list (operandn 2 expr) (operandn 3 expr) (lambda (env) (function-env expr (outerLayerVars env) env)))))
-
-; #
-(define function-env
-  (lambda (expr outerVars state)
-    (cond
-      [(null? outerVars)                                                                               (list (outerLayer state))]
-      [(or (number? (unbox (get-closure outerVars))) (eq? (length (unbox (get-closure outerVars))) 1)) 
-                                                                                 (function-env expr (deepState outerVars) state)]
-      [(member?* 'function (get-closure-body (unbox (get-closure outerVars))))                                             state]
-      [else                                                                       (function-env expr (deepState outerVars) state)])))
-
-; handles function calls from the parser 
-(define MfuncVal  
-  (lambda (expr state throw)
-    (call/cc
-      (lambda (return)
-        (MfuncExecute expr state return (lambda (s) ('error "break-out-of-loop")) (lambda (s) ('error "no-continue-statement")) throw)))))
-
-; handles modifying the state for function calls being defined by the parser.\ 
-(define Mfunc-state  
-  (lambda (expr state return break continue throw)
-    (MfuncExecute expr state (lambda (v) state) (lambda (s) ('error "break-out-of-loop")) (lambda (s) (continue s)) throw)))
-    
-; this will execute a given function call defined in expr
-(define MfuncExecute
-  (lambda (expr state return break continue throw)
-    (let* ((closure (MgetState (operand expr) state))
-           (inner ((closure-state closure) state))
-           (middle (addFrame inner))
-           (outer
-            (assign-parameters (closure-params closure)
-                               (funcargs expr)
-                               middle state throw)))
-    (if (not (eq? (length (closure-params closure)) (length (funcall-params expr))))
-        ('error "Error: Wrong Number of Parameters")
-        (MstateList (closure-body closure) outer return break continue throw)))))
-
-; If there are parameters defined in the params list, a new unction will be declared
-(define assign-parameters
-  (lambda (params arguments frame state throw)
-    (if (null? params)
-        frame
-        (assign-parameters (args params) (args arguments)
-                         (Mdeclare (firstExpr params) (Mval (firstExpr arguments) state throw) frame throw)
-                         state throw))))
-      
 
 ; Finds the integer value of an expression
 (define Minteger
@@ -397,18 +325,18 @@
   (lambda (varName state)
     (cond
       [(null? state)                             (error 'gStateError "The variable has not been declared.")]
-      [(contains? varName (stateVars state))                          (MgetState_layer varName (car state))]
+      [(contains? varName (stateVars state))                          (MgetStateLayer varName (car state))]
       [else                                                                 (MgetState varName (cdr state))])))
 
 
 ; Gets the value of a variable
-(define MgetState_layer
+(define MgetStateLayer
   (lambda (varName layer)
     (cond
       [(or (null? (vals layer)) (null? (vars layer)))                              (error 'gStateError "There was a problem finding that variable.")]
       [(and (eq? varName (car (vars layer))) (eq? '$null$ (car (vals layer))))   (error 'gStateError "This variable has not been assigned a value.")]
       [(eq? varName (car (vars layer)))                                                                                   (unbox (car (vals layer)))]
-      [(not (eq? varName (car (vars layer))))                                 (MgetState_layer varName (list (cdr (vars layer)) (cdr (vals layer))))]
+      [(not (eq? varName (car (vars layer))))                                 (MgetStateLayer varName (list (cdr (vars layer)) (cdr (vals layer))))]
       [else                                                                        (error 'gStateError "There was a problem finding that variable.")])))  
 
 
@@ -464,27 +392,27 @@
   (lambda (try except finally state return break continue throw)
     (call/cc
      (lambda (jump)
-         (Mstate (finally-into-block finally)
-                          (Mstate (try-into-block try)
+         (Mstate (finallyIntoBlock finally)
+                          (Mstate (tryIntoBlock try)
                                       state
-                                      (lambda (v) (begin (Mstate (finally-into-block finally) state return break continue throw) (return v)))
-                                      (lambda (state2) (break (Mstate (finally-into-block finally) state2 return break continue throw)))
-                                      (lambda (state2) (continue (Mstate (finally-into-block finally) state2 return break continue throw)))
-                                      (except-continuation except finally state return break continue throw jump))
+                                      (lambda (v) (begin (Mstate (finallyIntoBlock finally) state return break continue throw) (return v)))
+                                      (lambda (state2) (break (Mstate (finallyIntoBlock finally) state2 return break continue throw)))
+                                      (lambda (state2) (continue (Mstate (finallyIntoBlock finally) state2 return break continue throw)))
+                                      (exceptContinuation except finally state return break continue throw jump))
                           return break continue throw)))))
 
 ; creates the exception continuation for Mtry
-(define except-continuation
+(define exceptContinuation
   (lambda (except finally state return break continue throw jump)
     (cond
       [(null? except)
-                      (lambda (exception state2) (throw exception (Mstate (finally-into-block finally) state2 return break continue throw)))] 
+                      (lambda (exception state2) (throw exception (Mstate (finallyIntoBlock finally) state2 return break continue throw)))] 
       [(not (eq? 'catch (operator except)))                                                              (error "Incorrect catch statement")]
       [else
-            (lambda (exception state2) (jump (Mstate (finally-into-block finally)
+            (lambda (exception state2) (jump (Mstate (finallyIntoBlock finally)
                                     (popFrame (MstateList
                                                  (body except)
-                                                 (Mdeclare (exception-var except) exception (addFrame state) throw)
+                                                 (Mdeclare (exceptionVar except) exception (addFrame state) throw)
                                                  return 
                                                  (lambda (state2) (break (popFrame state2))) 
                                                  (lambda (state2) (continue (popFrame state2))) 
@@ -537,40 +465,6 @@
                                          (lambda (state1) (continue (popFrame state1)))
                                          (lambda (exception state1) (throw exception (popFrame state1)))))))
 
-; iterates across statement list executing expressions
-(define MstateList
-  (lambda (expr-list state return break continue throw)
-    (if (null? expr-list)
-        state
-        (MstateList (cdr expr-list) (Mstate (car expr-list) state return break continue throw) 
-                                                                     return break continue throw))))
-
-; 
-(define Mexprlist-global
-  (lambda (expr-list state return break continue throw init-expr-list)
-    (if (null? expr-list)
-        (Mmain init-expr-list state return break continue throw)
-        (Mexprlist-global (nextLines expr-list)
-                          (Mexpr-global (operator expr-list) state return break continue throw init-expr-list)
-                          return break continue throw init-expr-list))))
-
-
-(define Mexpr-global
-  (lambda (expr state return break continue throw init-expr-list)
-    (cond
-      [(eq? 'function (operator expr))                  (Mfunc-definition expr state return break continue throw)]
-      [(eq? '= (operator expr))                      (Massign (leftoperand expr) (rightoperand expr) state throw)]
-      [(eq? 'var (operator expr))                   (Mdeclare (leftoperand expr) (rightoperand expr) state throw)]
-      [else                                                          ('error "Unknown Statement outside of Main")])))
-
-
-(define Mmain
-  (lambda (expr-list state return break continue throw)
-    (cond
-      [(null? expr-list)                                                                      (error "There was a problem handling a function.")]
-      [(and (eq? (operator (firstExpr expr-list)) 'function)
-       (eq? (leftoperand (firstExpr expr-list)) `main))          (MstateList (main-body expr-list) (addFrame state) return break continue throw)]
-      [else                                                                           (Mmain (args expr-list) state return break continue throw)])))
 
 ; adds the declared variable to the state, removes past instance of it
 (define addState
@@ -591,7 +485,7 @@
       [(or (null? declared) (null? (car declared)))                                                              state]
       [(list? (vars declared))                 (StateUpdate (list (car (vars declared)) (car (vals declared)))
                                                (StateUpdate (list (cdr (vars declared)) (cdr (vals declared))) state))]
-      [else                                                             (addState declared (removevar declared state))])))
+      [else                                                             (addState declared (removeVar declared state))])))
 
 
 ; returns the current frame
@@ -602,19 +496,19 @@
       [else            (cdr state)])))
 
  ; cps helper function for remove  
-(define removevar-cps
+(define removeVar-cps
   (lambda (declared statevars statevals return)
     (cond
       [(null? statevars)                                                            (return statevars statevals)]
       [(eq? (car statevars) (car declared))                             (return (cdr statevars) (cdr statevals))]
-      [else (removevar-cps declared (cdr statevars) (cdr statevals) 
+      [else (removeVar-cps declared (cdr statevars) (cdr statevals) 
                                   (lambda (v1 v2) (return (cons (car statevars) v1) (cons (car statevals) v2))))])))
 
 
 ; removes the declared variable from the state
-(define removevar
+(define removeVar
   (lambda (declared state)
-    (cons (removevar-cps declared (stateVars state) (stateVals state) (lambda (v1 v2) (list v1 v2))) (cdr state))))
+    (cons (removeVar-cps declared (stateVars state) (stateVals state) (lambda (v1 v2) (list v1 v2))) (cdr state))))
 
 ;checks whether an expression is an integer expression
 (define intexp?
@@ -652,6 +546,100 @@
       [else                                                              #f])))
 
 
+;handles the main function
+(define Mmain
+  (lambda (expr-list state return break continue throw)
+    (cond
+      [(null? expr-list)                                                                      (error "There was a problem handling a function.")]
+      [(and (eq? (operator (firstExpr expr-list)) 'function)
+       (eq? (leftoperand (firstExpr expr-list)) `main))          (MstateList (mainBody expr-list) (addFrame state) return break continue throw)]
+      [else                                                                           (Mmain (args expr-list) state return break continue throw)])))
+
+
+
+; This handles expressions that define functions
+(define MfuncDef
+  (lambda (expr state return break continue throw)
+    (Mdeclare (operand expr) (functionClosure expr state) state throw)))
+ 
+; Returns the closure function for a given expression
+(define functionClosure
+  (lambda (expr state)
+    (list (operandn 2 expr) (operandn 3 expr) (lambda (env) (functionState expr (outerLayerVars env) env)))))
+
+; matches the outer variables to the ones within the function
+(define functionState
+  (lambda (expr outerVars state)
+    (cond
+      [(null? outerVars)                                                                               (list (outerLayer state))]
+      [(or (number? (unbox (getClosure outerVars))) (eq? (length (unbox (getClosure outerVars))) 1)) 
+                                                                                 (functionState expr (deepState outerVars) state)]
+      [(member?* 'function (getClosureBody (unbox (getClosure outerVars))))                                             state]
+      [else                                                                       (functionState expr (deepState outerVars) state)])))
+
+; handles function calls from the parser 
+(define MfuncVal  
+  (lambda (expr state throw)
+    (call/cc
+      (lambda (return)
+        (MfuncExecute expr state return (lambda (s) ('error "break-out-of-loop")) (lambda (s) ('error "no-continue-statement")) throw)))))
+
+; handles modifying the state for function calls being defined by the parser.\ 
+(define MfuncState  
+  (lambda (expr state return break continue throw)
+    (MfuncExecute expr state (lambda (v) state) (lambda (s) ('error "break-out-of-loop")) (lambda (s) (continue s)) throw)))
+    
+; this will execute a given function call defined in expr
+(define MfuncExecute
+  (lambda (expr state return break continue throw)
+    (let* ((closure (MgetState (operand expr) state))
+           (inner ((body closure) state))
+           (middle (addFrame inner))
+           (outer
+            (assignParams (vars closure)
+                               (funcargs expr)
+                               middle state throw)))
+    (if (not (eq? (length (vars closure)) (length (funcallParams expr))))
+        ('error "Error: Wrong Number of Parameters")
+        (MstateList (getClosureBody closure) outer return break continue throw)))))
+
+; If there are parameters defined in the params list, a new unction will be declared
+(define assignParams
+  (lambda (params arguments frame state throw)
+    (if (null? params)
+        frame
+        (assignParams (args params) (args arguments)
+                         (Mdeclare (firstExpr params) (Mval (firstExpr arguments) state throw) frame throw)
+                         state throw))))
+      
+; iterates across statement list executing expressions
+(define MstateList
+  (lambda (expr-list state return break continue throw)
+    (if (null? expr-list)
+        state
+        (MstateList (cdr expr-list) (Mstate (car expr-list) state return break continue throw) 
+                                                                     return break continue throw))))
+
+; handles the expression lists for global variables
+(define Mexprlist-global
+  (lambda (expr-list state return break continue throw init-expr-list)
+    (if (null? expr-list)
+        (Mmain init-expr-list state return break continue throw)
+        (Mexprlist-global (nextLines expr-list)
+                          (Mexpr-global (operator expr-list) state return break continue throw init-expr-list)
+                          return break continue throw init-expr-list))))
+
+;handles expressions for global variables outside of functions
+(define Mexpr-global
+  (lambda (expr state return break continue throw init-expr-list)
+    (cond
+      [(eq? 'function (operator expr))                  (MfuncDef expr state return break continue throw)]
+      [(eq? '= (operator expr))                      (Massign (leftoperand expr) (rightoperand expr) state throw)]
+      [(eq? 'var (operator expr))                   (Mdeclare (leftoperand expr) (rightoperand expr) state throw)]
+      [else                                                          ('error "Unknown Statement outside of Main")])))
+
+
+
 
 ;;;; ***************************************************
 ;;;; ***************************************************
@@ -683,7 +671,7 @@
 
 ;;;; ***************************************************
 ;;;; ***************************************************
-
+(displayln "Disclaimer: Test 4 takes a long time, but it will return a value")
 (define run-tests
   (lambda (i)
     (cond
