@@ -37,6 +37,10 @@
   (lambda (list)
     (cdr list)))
 
+(define nextLines
+  (lambda (list)
+    (cdr list)))
+
 ;gets the operand in an expression
 (define operand
   (lambda (list)
@@ -128,6 +132,47 @@
   (lambda (state)
     (cdr state)))
 
+(define get-closure-environment 
+  (lambda (state)
+    (caddr state)))
+
+(define get-closure-formal-params 
+  (lambda (state)
+    (car state)))
+
+(define get-closure-body 
+  (lambda (state)
+    (cadr state)))
+
+(define get-closure
+  (lambda (state) 
+    (car state)))
+
+(define outerLayerVars
+  (lambda (state)
+    (stateVars (outerLayer state))))
+
+(define outerLayer
+  (lambda (state)
+    (cond
+      [(null? (cdr state))              (car state)]
+      [else                (outerLayer (cdr state))])))
+
+(define get-argument-list
+  (lambda (expr)
+    (cddr expr)))
+
+(define main-body
+  (lambda (expr-list)
+    (car (cdddar expr-list))))
+
+(define modifiers
+  (lambda (expr)
+    (cdr expr)))
+
+(define firstExpr
+  (lambda (expr-list)
+    (car expr-list)))
 
 (define closure-body cadr)
 (define closure-state caddr)
@@ -159,7 +204,7 @@
     (cond 
       ((null? list)                                           #f)
       ((list? (car list))
-             (or (member?* a (car list))(member?* a (cdr list))))
+             (or (member?* a (car list)) (member?* a (cdr list))))
       ((eq? a (car list))                                     #t)
       (else                              (member?* a (cdr list))))))
 
@@ -216,13 +261,13 @@
   (lambda (expr state return break continue throw)
     (cond
       [(null? expr)                                                                                                           state]
-      [(intexp? expr state)                                                                                   (Minteger expr state throw)]
-      [(boolexp? expr state)                                                                                     (Mbool expr state throw)]
+      [(intexp? expr state)                                                                             (Minteger expr state throw)]
+      [(boolexp? expr state)                                                                               (Mbool expr state throw)]
       [(eq? (operator expr) 'function)                        (Mfunc-definition (modifiers expr) state return break continue throw)]
       [(eq? (operator expr) 'funcall)                                          (Mfunc-state expr state return break continue throw)]
       [(eq? (operator expr) 'return)                                     (Mreturn (operand expr) state return break continue throw)]
-      [(eq? (operator expr) 'var)                                           (Mdeclare (leftoperand expr) (rightoperand expr) state throw)]
-      [(eq? (operator expr) '=)                           (Mupdate (leftoperand expr) (Mval (rightoperand expr) state) state throw)]
+      [(eq? (operator expr) 'var)                                     (Mdeclare (leftoperand expr) (rightoperand expr) state throw)]
+      [(eq? (operator expr) '=)                           (Mupdate (leftoperand expr) (Mval (rightoperand expr) state throw) state)]
       [(eq? (operator expr) 'if)      (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
       [(eq? (operator expr) 'while)                              (Mwhile (leftoperand expr) (rightoperand expr) state return throw)]
       [(eq? (operator expr) 'break)                                                                            (Mbreak state break)]
@@ -232,17 +277,13 @@
       [(eq? (operator expr) 'throw)                                                                    (throw (operand expr) state)]
       [else                                                                                      (error 'unknownop "Bad Statement")])))
 
-(define modifiers
-  (lambda (expr)
-    (cdr expr)))
-
 (define Mfunc-definition
   (lambda (expr state return break continue throw)
-    (Mdeclare (operandn 1 expr) (function-closure expr state) state throw)))
+    (Mdeclare (operator expr) (function-closure expr state) state throw)))
  
 (define function-closure
   (lambda (expr state)
-    (list (operandn 2 expr) (operandn 3 expr) (lambda (env) (function-env expr (outerLayerVars env) env)))))
+    (list 'func (operandn 1 expr) (operandn 2 expr) (lambda (env) (function-env expr (outerLayerVars env) env)))))
 
 (define function-env
   (lambda (expr outerVars state)
@@ -253,35 +294,6 @@
       [(member?* 'function (get-closure-body (unbox (get-closure outerVars)))) state]
       [else    (function-env expr (deepState outerVars) state)])))
 
-(define get-closure-environment 
-  (lambda (state)
-    (caddr state)))
-
-(define get-closure-formal-params 
-  (lambda (state)
-    (car state)))
-
-(define get-closure-body 
-  (lambda (state)
-    (cadr state)))
-
-(define get-closure
-  (lambda (state) 
-    (car state)))
-
-(define outerLayerVars
-  (lambda (state)
-    (stateVars (outerLayer state))))
-
-(define outerLayer
-  (lambda (state)
-    (cond
-      [(null? (cdr state))              (car state)]
-      [else                (outerLayer (cdr state))])))
-
-(define get-argument-list
-  (lambda (expr)
-    (cddr expr)))
 
 (define MfuncVal  
   (lambda (expr state throw)
@@ -292,7 +304,7 @@
             ('error "Error: mismatched-number-of-parameters")
             
             (MstateList (closure-body (MgetState (operand expr) state))
-              (assign-parameters (operator (MgetState (operand expr) state)) (get-argument-list expr)
+              (assign-parameters (modifiers (MgetState (operand expr) state)) (modifiers expr)
                 (addFrame ((closure-state (MgetState (operand expr) state)) state)) state throw)
               return
               (lambda (s) ('error "break-out-of-loop"))
@@ -300,12 +312,12 @@
 
 (define Mfunc-state  
   (lambda (expr state return break continue throw)
-    (if (not (eq? (length (operator (MgetState (operand expr) state))) (length (closure-params expr))))
+    (if (not (eq? (length (modifiers (MgetState (operator expr) state))) (length (closure-params expr))))
     
         ('error "Error: mismatched-number-of-parameters")
         
         (MstateList (closure-body (MgetState (operand expr) state))
-           (assign-parameters (operator (MgetState (operand expr) state)) (get-argument-list expr)
+           (assign-parameters (modifiers (MgetState (operator expr) state)) (modifiers expr)
              (addFrame ((closure-state (MgetState (operand expr) state)) state)) state throw)
            (lambda (v) state) 
            (lambda (s) ('error "break-out-of-loop"))
@@ -399,9 +411,9 @@
     (cond
      [(boolexp? expr state)                                                     (Mbool expr state throw)]
      [(intexp? expr state)                                                   (Minteger expr state throw)]
-     [(eq? 'funcall (operator expr))    (MfuncVal expr state throw)]
-     [else               (error 'gStateError
-                                (string-append "Variable not declared: " (symbol->string expr)))])))
+     [(eq? 'funcall (operator expr))                             (MfuncVal (modifiers expr) state throw)]
+     [(and (list? expr) (eq? 'func (operator expr)))                                                expr]
+     [else          (error 'gStateError (string-append "Variable not declared: " (symbol->string expr)))])))
   
 
 
@@ -463,8 +475,8 @@
 (define Mreturn
   (lambda (expr state return break continue throw)
     (cond
-      [(eq? (Mval expr state) #t)               (return "true")]
-      [(eq? (Mval expr state) #f)              (return "false")]
+      [(eq? (Mval expr state throw) #t)               (return "true")]
+      [(eq? (Mval expr state throw) #f)              (return "false")]
       [else                          (return (Mval expr state throw))])))
 
 
@@ -511,6 +523,32 @@
         state
         (MstateList (cdr expr-list) (Mstate (car expr-list) state return break continue throw) 
                                                                      return break continue throw))))
+
+(define Mexprlist-global
+  (lambda (expr-list state return break continue throw init-expr-list)
+    (if (null? expr-list)
+        (Mmain init-expr-list state return break continue throw)
+        (Mexprlist-global (nextLines expr-list)
+                          (Mexpr-global (operator expr-list) state return break continue throw init-expr-list)
+                          return break continue throw init-expr-list))))
+
+
+(define Mexpr-global
+  (lambda (expr state return break continue throw init-expr-list)
+    (cond
+      [(eq? 'function (operator expr))      (Mfunc-definition (modifiers expr) state return break continue throw)]
+      [(eq? '= (operator expr))                      (Massign (leftoperand expr) (rightoperand expr) state throw)]
+      [(eq? 'var (operator expr))                   (Mdeclare (leftoperand expr) (rightoperand expr) state throw)]
+      [else                                                          ('error "Unknown Statement outside of Main")])))
+
+
+(define Mmain
+  (lambda (expr-list state return break continue throw)
+    (cond
+      [(null? expr-list)                                                                                              (error "There was a problem handling a function.")]
+      [(and (eq? (operator (firstExpr expr-list)) 'function) (eq? (leftoperand (firstExpr expr-list)) `main))  (MstateList (main-body expr-list) (addFrame state) return break continue throw)]
+      [else                                                                                                    (Mmain (args expr-list) state return break continue throw)])))
+
 
 
 ; adds the declared variable to the state, removes past instance of it
@@ -592,35 +630,7 @@
       [(eq? (operator expr) '>=)                                         #t]
       (else                                                              #f))))
 
-(define handle-expr-list
-  (lambda (expr-list state return break continue throw init-expr-list)
-    (if (null? expr-list)
-        (handle-main init-expr-list state return break continue throw)
-        (handle-expr-list 
-          (cdr expr-list)
-          (handle-expr (caar expr-list) state return break continue throw init-expr-list)
-          return break continue throw init-expr-list))))
 
-(define handle-main
-  (lambda (expr-list state return break continue throw)
-    (cond
-      [(null? expr-list)                                                                                                                                    (error "There was a problem handeling a function.")]
-      [(and (eq? (cadar expr-list) 'main) (eq? (caar expr-list) 'function))                                            (handle-expr-list (car (cdddar expr-list)) (addFrame state) return break continue throw)]
-      [else                                                                                                                                     (handle-main (cdr expr-list) state return break continue throw)]
-    )
-  )
-)
-
-(define handle-expr
-  (lambda (expr state return break continue throw init-expr-list)
-    (cond
-      [(eq? 'function (operator expr))                                       (Mfunc-definition (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
-      [(eq? '= (operator expr))                                                                                                  (Massign (vars expr) (vals expr) state throw)]
-      [(eq? 'var (operator expr))                                                                                               (Mdeclare (vars expr) (vals expr) state throw)]
-      [else ('error "There was a problem handling a function.")]
-    )
-  )
-)
 
 ;;;; ***************************************************
 ;;;; ***************************************************
@@ -636,11 +646,12 @@
   (lambda (expr)
     (call/cc
       (lambda (return)
-        (MstateList expr (newstate) return
+        (Mexprlist-global expr (newstate) return
                     (lambda (state) (error 'unknownop "No loop to break out of"))
                     (lambda (state) (error 'unknownop "No loop to continue"))
                     (lambda (exception state)
-                      (error 'unknownop (string-append "Uncaught exception thrown: " (format "~a" exception)))))))))
+                      (error 'unknownop (string-append "Uncaught exception thrown: " (format "~a" exception))))
+                    expr)))))
 
 
     
@@ -668,7 +679,7 @@
 ;;; (run-tests 41)
 ;;
 
-(parser "tests2/test37.txt")
+(interpret (parser "tests3/test4.txt"))
 
 
 
