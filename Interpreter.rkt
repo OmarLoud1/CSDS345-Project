@@ -293,23 +293,23 @@
 
 ; determines the type of statement and executes its function
 (define Mstate
-  (lambda (expr state return break continue throw)
+  (lambda (expr state return break continue throw ctime-type)
     (cond
       [(null? expr)                                                                                                           state]
       [(intexp? expr state)                                                                             (Minteger expr state throw)]
       [(boolexp? expr state)                                                                               (Mbool expr state throw)]
-      [(eq? (operator expr) 'function)                                    (MfuncDef expr state return break continue throw)]
-      [(eq? (operator expr) 'funcall)                                          (MfuncState expr state return break continue throw)]
-      [(eq? (operator expr) 'return)                                     (Mreturn (operand expr) state return break continue throw)]
-      [(eq? (operator expr) 'var)                                     (Mdeclare (leftoperand expr) (rightoperand expr) state throw)]
-      [(eq? (operator expr) '=)                           (Mupdate (leftoperand expr) (Mval (rightoperand expr) state throw) state)]
-      [(eq? (operator expr) 'if)      (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
-      [(eq? (operator expr) 'while)                              (Mwhile (leftoperand expr) (rightoperand expr) state return throw)]
-      [(eq? (operator expr) 'break)                                                                            (Mbreak state break)]
-      [(eq? (operator expr) 'continue)                                                                   (Mcontinue state continue)]
-      [(eq? (operator expr) 'begin)                                          (Mbegin (args expr) state return break continue throw)]
-      [(eq? (operator expr) 'try)    (Mtry (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw)]
-      [(eq? (operator expr) 'throw)                                                 (throw (Mval (operand expr) state throw) state)]
+      [(eq? (operator expr) 'function)                                    (MfuncDef expr state return break continue throw ctime-type)]
+      [(eq? (operator expr) 'funcall)                                          (MfuncState expr state return break continue throw ctime-type)]
+      [(eq? (operator expr) 'return)                                     (Mreturn (operand expr) state return break continue throw ctime-type)]
+      [(eq? (operator expr) 'var)                                     (Mdeclare (leftoperand expr) (rightoperand expr) state throw ctime-type)]
+      [(eq? (operator expr) '=)                           (Mupdate (leftoperand expr) (Mval (rightoperand expr) state throw) state ctime-type)]
+      [(eq? (operator expr) 'if)      (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw ctime-type)]
+      [(eq? (operator expr) 'while)                              (Mwhile (leftoperand expr) (rightoperand expr) state return throw ctime-type)]
+      [(eq? (operator expr) 'break)                                                                            (Mbreak state break)] ; does not need to include compile type
+      [(eq? (operator expr) 'continue)                                                                   (Mcontinue state continue)] ; does not need to include compile type
+      [(eq? (operator expr) 'begin)                                          (Mbegin (args expr) state return break continue throw ctime-type)]
+      [(eq? (operator expr) 'try)    (Mtry (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw ctime-type)]
+      [(eq? (operator expr) 'throw)                                                 (throw (Mval (operand expr) state throw ctime-type) state)]
       [else                                                                                      (error 'unknownop "Bad Statement")])))
 
 
@@ -371,10 +371,10 @@
 
 ; declares a variable
 (define Mdeclare
-  (lambda (var val state throw)
+  (lambda (var val state throw ctime-type)
     (if (null? val)
         (StateUpdate (list var '$null$) state)
-        (StateUpdate (list var (Mval val state throw)) state))))
+        (StateUpdate (list var (Mval val state throw ctime-type)) state))))
 
 
 ; assigns a value to a variable
@@ -387,11 +387,11 @@
 
 ;check either boolean or integer
 (define Mval
-  (lambda (expr state throw)
+  (lambda (expr state throw ctime-type) 
     (cond
      [(boolexp? expr state)                                                                       (Mbool expr state throw)]
      [(intexp? expr state)                                                                     (Minteger expr state throw)]
-     [(eq? 'funcall (operator expr))                                                           (MfuncVal expr state throw)]
+     [(eq? 'funcall (operator expr))                                                           (MfuncVal expr state throw ctime-type)]
      [(list? expr)                                                                                                    expr]
      [else                            (error 'gStateError (string-append "Variable not declared: " (symbol->string expr)))])))
   
@@ -399,81 +399,83 @@
 
 ; executes an if expression given a condition, an expression to execute if true, an expression to execute if false, and the state
 (define Mif
-  (lambda (condition expr exprelse state return break continue throw)
+  (lambda (condition expr exprelse state return break continue throw ctime-type)
     (cond
-      [(eq? (Mbool condition state throw) #t)     (Mstate expr state return break continue throw)]
-      [(not(null? exprelse))                  (Mstate exprelse state return break continue throw)]
+      [(eq? (Mbool condition state throw) #t)     (Mstate expr state return break continue throw ctime-type)]
+      [(not(null? exprelse))                  (Mstate exprelse state return break continue throw ctime-type)]
       [else                                                                                 state])))
 
 
 ; executes a while loop given a condition, an expression to execute while true, and the state
 (define Mwhile
-  (lambda (condition expr state return throw)
+  (lambda (condition expr state return throw ctime-type)
     (call/cc
       (lambda (break)
         (cond
           [(Mbool condition state throw) (Mwhile condition expr (Mstate expr state return break 
-                                         (lambda (state2) (break (Mwhile condition expr state2 return throw))) throw) return throw)]
+                                         (lambda (state2) (break (Mwhile condition expr state2 return throw ctime-type))) throw ctime-type) return throw ctime-type)]
           [else                                                                                                               state])))))
 
 ; handles the try block
 (define Mtry
-  (lambda (try except finally state return break continue throw)
+  (lambda (try except finally state return break continue throw ctime-type)
     (call/cc
      (lambda (jump)
          (Mstate (finallyIntoBlock finally)
                           (Mstate (tryIntoBlock try)
                                       state
-                                      (lambda (v) (begin (Mstate (finallyIntoBlock finally) state return break continue throw) (return v)))
-                                      (lambda (state2) (break (Mstate (finallyIntoBlock finally) state2 return break continue throw)))
-                                      (lambda (state2) (continue (Mstate (finallyIntoBlock finally) state2 return break continue throw)))
-                                      (exceptContinuation except finally state return break continue throw jump))
-                          return break continue throw)))))
+                                      (lambda (v) (begin (Mstate (finallyIntoBlock finally) state return break continue throw ctime-type) (return v)))
+                                      (lambda (state2) (break (Mstate (finallyIntoBlock finally) state2 return break continue throw ctime-type)))
+                                      (lambda (state2) (continue (Mstate (finallyIntoBlock finally) state2 return break continue throw ctime-type)))
+                                      (exceptContinuation except finally state return break continue throw jump ctime-type)
+                                      ctime-type)
+                          return break continue throw ctime-type)))))
 
 ; creates the exception continuation for Mtry
 (define exceptContinuation
-  (lambda (except finally state return break continue throw jump)
+  (lambda (except finally state return break continue throw jump ctime-type)
     (cond
       [(null? except)
-                      (lambda (exception state2) (throw exception (Mstate (finallyIntoBlock finally) state2 return break continue throw)))] 
+                      (lambda (exception state2) (throw exception (Mstate (finallyIntoBlock finally) state2 return break continue throw ctime-type)))] 
       [(not (eq? 'catch (operator except)))                                                              (error "Incorrect catch statement")]
       [else
             (lambda (exception state2) (jump (Mstate (finallyIntoBlock finally)
                                     (popFrame (MstateList
                                                  (body except)
-                                                 (Mdeclare (exceptionVar except) exception (addFrame state) throw)
+                                                 (Mdeclare (exceptionVar except) exception (addFrame state) throw ctime-type)
                                                  return 
                                                  (lambda (state2) (break (popFrame state2))) 
                                                  (lambda (state2) (continue (popFrame state2))) 
-                                                 (lambda (exception2 state2) (throw exception2 (popFrame state2)))))
-                                    return break continue throw)))])))
+                                                 (lambda (exception2 state2) (throw exception2 (popFrame state2)))
+                                                 ctime-type))
+                                    return break continue throw ctime-type)))])))
 
 
 ;returns the value of the expression given
 (define Mreturn
-  (lambda (expr state return break continue throw)
+  (lambda (expr state return break continue throw ctime-type)
     (cond
-      [(eq? (Mval expr state throw) #t)                  (return "true")]
-      [(eq? (Mval expr state throw) #f)                 (return "false")]
-      [else                             (return (Mval expr state throw))])))
+      [(eq? (Mval expr state throw ctime-type) #t)                  (return "true")]
+      [(eq? (Mval expr state throw ctime-type) #f)                 (return "false")]
+      [else                             (return (Mval expr state throw ctime-type))])))
 
 
 ;updates the state instead of deleting and adding again
 (define Mupdate
-  (lambda (varName val state)
+  (lambda (varName val state ctime-type)
     (cond
       [(null? state)                                              (error 'gStateError "The variable has not been declared.")]
-      [(contains? varName (stateVars state))  (cons (begin (Mupdate_layer varName val (car state)) (car state)) (cdr state))]
-      [else                                                             (cons (car state) (Mupdate varName val (cdr state)))])))
+      [(contains? varName (stateVars state))  (cons (begin (Mupdate_layer varName val (car state)) (car state)) (cdr state) ctime-type)]
+      [else                                                             (cons (car state) (Mupdate varName val (cdr state) ctime-type))])))
 
 ; Gets the value of a variable
 (define Mupdate_layer
-  (lambda (varName val layer)
+  (lambda (varName val layer ctime-type)
     (cond
       [(or (null? (vals layer)) (null? (vars layer)))                                  (error 'gStateError "There was a problem finding that variable.")]
       [(and (eq? varName (car (vars layer))) (eq? '$null$ (car (vals layer))))       (error 'gStateError "This variable has not been assigned a value.")]
       [(eq? varName (car (vars layer)))                                                                                 (set-box (car (vals layer)) val)]
-      [(not (eq? varName (car (vars layer))))                                   (Mupdate_layer varName val (list (cdr (vars layer)) (cdr (vals layer))))]
+      [(not (eq? varName (car (vars layer))))                                   (Mupdate_layer varName val (list (cdr (vars layer)) (cdr (vals layer))) ctime-type)]
       [else                                                                            (error 'gStateError "There was a problem finding that variable.")])))  
 
 ; helper that calls break
@@ -488,11 +490,12 @@
 
 ; enters the begin statement and defines the break continue and throw 
 (define Mbegin
-  (lambda (expr-list state return break continue throw)
+  (lambda (expr-list state return break continue throw ctime-type)
     (popFrame (MstateList expr-list (addFrame state) return
                                          (lambda (state1) (break (popFrame state1)))
                                          (lambda (state1) (continue (popFrame state1)))
-                                         (lambda (exception state1) (throw exception (popFrame state1)))))))
+                                         (lambda (exception state1) (throw exception (popFrame state1)))
+                                         ctime-type))))
 
 
 ; adds the declared variable to the state, removes past instance of it
@@ -583,21 +586,13 @@
       [(eq? (findMain expr-list) class)    (findMain expr-list state return break continue throw class)]
       [else                                                                           (Mmain (args expr-list) state return break continue throw)])))
 
-(define find-main
+(define findMain
   (lambda (expr-list state return break continue throw class)
   (cond
     [(and (eq? (operator (firstExpr expr-list)) 'function) (eq? (leftoperand (firstExpr expr-list)) `main))
-      (MstateList (mainBody expr-list) (addFrame state) return break continue throw ())]
-    [else (find-main (cdr expr-list) state return break continue throw class)]
+      (MstateList (mainBody expr-list) (addFrame state) return break continue throw (MgetStateLayer class state))]
+    [else (findMain (cdr expr-list) state return break continue throw class)]
     )))
-  
-  (define lookup
-    (lambda (luVal state)
-      (lookupInState luVal state)))
-
-  (define lookupInState
-    (lambda (luVal state)
-      ()))
 
 (define get-class
   (lambda (expr-list)
@@ -605,8 +600,16 @@
 
 ; This handles expressions that define functions
 (define MfuncDef
-  (lambda (expr state return break continue throw)
-    (Mdeclare (operand expr) (functionClosure expr state) state throw)))
+  (lambda (expr state return break continue throw ctime-type)
+    (Mdeclare (operand expr) (functionClosure expr state) state throw (retrieveContainClass ctime-type))))
+
+; Will get and return the class that a given function is contained in
+(define retrieveContainClass
+  (lambda (closure)) 
+    (unboxFromStmtList (caar (getStmtList closure))))
+
+; retrieves an unboxed value from the statement list
+(define unboxedFromStmtList (lambda (stmt-list) (getStmtList (unbox stmt-list))))
  
 ; Returns the closure function for a given expression
 (define functionClosure
@@ -670,26 +673,28 @@
 
 ; handles function calls from the parser 
 (define MfuncVal  
-  (lambda (expr state throw)
+  (lambda (expr state throw ctime-type)
     (call/cc
       (lambda (return)
-        (MfuncExecute expr state return (lambda (s) ('error "break-out-of-loop")) (lambda (s) ('error "no-continue-statement")) throw)))))
+        (MfuncExecute expr state return (lambda (s) ('error "break-out-of-loop")) (lambda (s) ('error "no-continue-statement")) throw ctime-type)))))
 
 ; handles modifying the state for function calls being defined by the parser.\ 
 (define MfuncState  
-  (lambda (expr state return break continue throw)
-    (MfuncExecute expr state (lambda (v) state) (lambda (s) ('error "break-out-of-loop")) (lambda (s) (continue s)) throw)))
+  (lambda (expr state return break continue throw ctime-type)
+    (MfuncExecute expr state (lambda (v) state) (lambda (s) ('error "break-out-of-loop")) (lambda (s) (continue s)) throw ctime-type)))
     
 ; this will execute a given function call defined in expr
+; MODIFICATION FOR THIS CLASS TO ADD COMPILE TYPE REQUIRES STEP 5 OF PART 2
 (define MfuncExecute
-  (lambda (expr state return break continue throw)
+  (lambda (expr state return break continue throw ctime-type)
     (let* ((closure (MgetState (operand expr) state))
            (inner ((body closure) state))
            (middle (addFrame inner))
            (outer
             (assignParams (vars closure)
                                (funcargs expr)
-                               middle state throw)))
+                               middle state throw))
+            (modCompileType (MgetStateLayer (getStmtList closure) state)))
     (if (not (eq? (length (vars closure)) (length (funcallParams expr))))
         ('error "Error: Wrong Number of Parameters")
         (MstateList (getClosureBody closure) outer return break continue throw)))))
@@ -705,11 +710,11 @@
       
 ; iterates across statement list executing expressions
 (define MstateList
-  (lambda (expr-list state return break continue throw)
+  (lambda (expr-list state return break continue throw ctime-type)
     (if (null? expr-list)
         state
-        (MstateList (cdr expr-list) (Mstate (car expr-list) state return break continue throw) 
-                                                                     return break continue throw))))
+        (MstateList (cdr expr-list) (Mstate (car expr-list) state return break continue throw ctime-type) 
+                                                                     return break continue throw ctime-type))))
 
 ; handles the expression lists for global variables
 (define Mexprlist-global
