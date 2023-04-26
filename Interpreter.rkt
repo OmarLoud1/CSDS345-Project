@@ -184,6 +184,35 @@
   (lambda (list)
     (cdr (cdr list))))
 
+(define getStmtList
+  (lambda (list)
+    (cadddr list)))
+
+
+(define superClass
+  (lambda (expr)
+    (cond
+      ((null?  (car (cddr expr))) '())
+      (else (car (cdr (caddr expr)))))))
+
+
+(define populateVars
+  (lambda (vars parent state)
+    (cond
+      ((null? parent) vars)
+      (else (cons (append (car vars) (caadr (MgetStateLayer parent state)))
+                  (cons (append (cadr field) (cadadr (MgetStateLayer parent state))) '()))))))
+
+
+(define validOperand
+  (lambda (expr)
+    (not (null? (cdr (cdr expr))))))
+
+(define className
+  (lambda (expr)
+    (cadr expr)))
+
+
 
 ;;;; ***************************************************
 
@@ -340,7 +369,7 @@
       [else                                                                        (error 'gStateError "There was a problem finding that variable.")])))  
 
 
-; delares a variable
+; declares a variable
 (define Mdeclare
   (lambda (var val state throw)
     (if (null? val)
@@ -548,14 +577,31 @@
 
 ;handles the main function
 (define Mmain
-  (lambda (expr-list state return break continue throw)
+  (lambda (expr-list state return break continue throw class)
     (cond
       [(null? expr-list)                                                                      (error "There was a problem handling a function.")]
-      [(and (eq? (operator (firstExpr expr-list)) 'function)
-       (eq? (leftoperand (firstExpr expr-list)) `main))          (MstateList (mainBody expr-list) (addFrame state) return break continue throw)]
+      [(eq? (findMain expr-list) class)    (findMain expr-list state return break continue throw class)]
       [else                                                                           (Mmain (args expr-list) state return break continue throw)])))
 
+(define find-main
+  (lambda (expr-list state return break continue throw class)
+  (cond
+    [(and (eq? (operator (firstExpr expr-list)) 'function) (eq? (leftoperand (firstExpr expr-list)) `main))
+      (MstateList (mainBody expr-list) (addFrame state) return break continue throw ())]
+    [else (find-main (cdr expr-list) state return break continue throw class)]
+    )))
+  
+  (define lookup
+    (lambda (luVal state)
+      (lookupInState luVal state)))
 
+  (define lookupInState
+    (lambda (luVal state)
+      ()))
+
+(define get-class
+  (lambda (expr-list)
+    (cadar expr-list)))
 
 ; This handles expressions that define functions
 (define MfuncDef
@@ -564,8 +610,53 @@
  
 ; Returns the closure function for a given expression
 (define functionClosure
+  (lambda (expr state class)
+    (list (cons 'this (operandn 2 expr)) (operandn 3 expr) (lambda (env) (functionState expr (outerLayerVars env) env)) class)))
+
+(define classClosure
   (lambda (expr state)
-    (list (operandn 2 expr) (operandn 3 expr) (lambda (env) (functionState expr (outerLayerVars env) env)))))
+    (list (superClass expr)
+     (populateVars (getClosure (evalDefinitionList (getStmtList expr) (newstate))) (superClass expr) state)
+     (getClosure (evalMethodList (getStmtList expr) (newstate) (className expr))))))
+
+
+(define evalDefinitionList
+  (lambda (stmts state))
+   (if (null? stmts)
+      state
+      (evalDefintionList (modifiers stmts) (evalDefinition (operator stmts state)))))
+
+(define evalDefinition
+  (lambda (expr state)
+    (cond
+      ((eq? 'var (operator expr)) (decalareDefinitions expr state))
+      (else state))))
+  
+(define decalareDefinitions
+  (lambda (expr state)
+      (cond
+        ((validOperand expr) (Mdeclare (operand expr) (rightoperand expr) state))
+        (else (Mdeclare (operand expr) '$null$ state)))))
+
+
+(define evalMethodList
+ (lambda (stmts state class))
+   (if (null? stmts)
+      state
+      (evalMethodList (modifiers stmts) (evalMethod (operator stmts state)) class)))
+
+
+(define evalMethod
+  (lambda (expr state class)
+    (cond
+      ((or (eq? 'function (operator expr)) (eq? 'static-function (operator expr))) (declareFunction expr state class))
+      (else environment))))
+
+(define declareFunction
+  (lambda (expr state class)
+    (insert (operand expr)
+            (functionClosure expr state class)
+            environment)))
 
 ; matches the outer variables to the ones within the function
 (define functionState
@@ -624,14 +715,14 @@
 (define Mexprlist-global
   (lambda (expr-list state return break continue throw init-expr-list)
     (if (null? expr-list)
-        (Mmain init-expr-list state return break continue throw)
+        (Mmain init-expr-list state return break continue throw class)
         (Mexprlist-global (nextLines expr-list)
                           (Mexpr-global (operator expr-list) state return break continue throw init-expr-list)
-                          return break continue throw init-expr-list))))
+                          return break continue throw init-expr-list class))))
 
 ;handles expressions for global variables outside of functions
 (define Mexpr-global
-  (lambda (expr state return break continue throw init-expr-list)
+  (lambda (expr state return break continue throw init-expr-list class)
     (cond
       [(eq? 'function (operator expr))                  (MfuncDef expr state return break continue throw)]
       [(eq? '= (operator expr))                      (Massign (leftoperand expr) (rightoperand expr) state throw)]
@@ -652,15 +743,15 @@
 ; the main method that runs out interpreter on the parsed code and outputs the result
 (provide interpret)
 (define interpret
-  (lambda (expr)
+  (lambda (file class)
     (call/cc
       (lambda (return)
-        (Mexprlist-global expr (newstate) return
+        (Mexprlist-global (parser file) (newstate) return
                     (lambda (state) (error 'unknownop "No loop to break out of"))
                     (lambda (state) (error 'unknownop "No loop to continue"))
                     (lambda (exception state)
                       (error 'unknownop (string-append "Uncaught exception thrown: " (format "~a" exception))))
-                    expr)))))
+                    (parser file) class)))))
 
 
     
