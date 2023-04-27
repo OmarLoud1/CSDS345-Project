@@ -188,6 +188,9 @@
   (lambda (list)
     (cadddr list)))
 
+(define getObjExpr
+  (lambda (object)
+    (cadadr object)))
 
 (define superClass
   (lambda (expr)
@@ -195,13 +198,32 @@
       ((null?  (car (cddr expr))) '())
       (else (car (cdr (caddr expr)))))))
 
+(define getClass
+  (lambda (expr)
+    (car expr)))
+  
+
 
 (define populateVars
   (lambda (vars parent state)
     (cond
       ((null? parent) vars)
       (else (cons (append (car vars) (caadr (MgetStateLayer parent state)))
-                  (cons (append (cadr field) (cadadr (MgetStateLayer parent state))) '()))))))
+                  (cons (append (cadr field) (getObjExpr (MgetStateLayer parent state))) '()))))))
+
+(define objectVals
+  (lambda (class state ctime-type)
+    (allInstances (getObjExpr (MgetStateLayer class state)) state ctime-type)))
+
+(define allInstances
+  (lambda (expr state ctime-type)
+    (cond
+      ((null? expr) '())
+      (else (cons (box (Mval (unbox (operator expr))
+                                        state
+                                        (lambda (v state1) (error "exception thrown"))
+                                        ctime-type))
+                  (allInstances (modifiers expr) state ctime-type))))))
 
 
 (define validOperand
@@ -212,6 +234,48 @@
   (lambda (expr)
     (cadr expr)))
 
+
+(define getObjVars
+  (lambda (expr)
+    (caadr expr)))
+
+(define getObjVals
+  (lambda (expr)
+    (cadr expr)))
+
+(define getLeftDot
+  (lambda (expr)
+    (cadr expr)))
+
+(define getRightDot
+  (lambda (expr)
+    (caddr expr)))
+
+(define getDot
+  (lambda (expr)
+    (cadr expr)))
+
+(define isDot
+  (lambda (expr)
+    (cond
+      ((list? (operand expr)) (caadr expr))
+      (else (operand expr)))))
+
+(define dotAssignStmt
+  (lambda (expr)
+     (car (cddadr expr))))
+
+(define getNextObj 
+  (lambda (expr)
+     (cadadr expr)))
+
+(define getNextFunc 
+  (lambda (expr)
+    (car (cadadr expr))))
+
+(define superObj
+  (lambda (closure)
+    (cons 'new (cons (getClass closure) '()))))
 
 
 ;;;; ***************************************************
@@ -594,10 +658,6 @@
     [else (findMain (cdr expr-list) state return break continue throw class)]
     )))
 
-(define get-class
-  (lambda (expr-list)
-    (cadar expr-list)))
-
 ; This handles expressions that define functions
 (define MfuncDef
   (lambda (expr state return break continue throw ctime-type)
@@ -660,6 +720,34 @@
     (insert (operand expr)
             (functionClosure expr state class)
             environment)))
+
+(define evalDotExpression
+  (lambda (expr state throw ctime-type function)
+    (evalRightDot (getRightDot expr)
+    (evalLeftDot (getLeftDot expr) state throw ctime-type)
+                         state throw ctime-type function)))
+
+(define evalLeftDot
+  (lambda (object state throw ctime-type)
+     (cond
+      ((eq? object 'this) (MgetStateLayer 'this state))
+      ((eq? object 'super) (objectClosure (superObj ctime-type) state ctime-type))
+      ((and (list? object) (eq? (operator object) 'funcall))
+       (MfuncExecute object state throw ctime-type)) ;; need to fix the execute for this to even try to run
+      ((list? object) (objectClosure object state ctime-type))
+      (else (lookup-cond instance environment compile-type))))) ;; need to implement cond
+
+(define evalRightDot
+  (lambda (expr object state throw ctime-type function)
+     (cond
+      ((eq? funcall #t) object)
+      (else (Mval expr (cons (cons (getObjVars (MgetStateLayer (getClass object) state))
+                       (cons (getObjVals object) '()))'()) throw ctime-type)))))
+
+
+(define objectClosure 
+  (lambda (expr state ctime-type)
+    (list (className expr) (objectVals (className expr) state ctime-type))))
 
 ; matches the outer variables to the ones within the function
 (define functionState
