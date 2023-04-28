@@ -1,0 +1,1036 @@
+; If you are using scheme instead of racket, comment these two lines, uncomment the (load "simpleParser.scm") and comment the (require "simpleParser.rkt")
+#lang racket
+(require "classParser.rkt")
+; A simple interpreter for Java
+; Daniel Schnabel, Anthony Testa, and Oliver Traben
+; 5/09/2021
+
+
+; An interpreter for the simple language that uses call/cc for the continuations.  Does not handle side effects.
+(define call/cc call-with-current-continuation)
+
+
+; The functions that start interpret-...  all return the current environment.
+; The functions that start eval-...  all return a value
+
+; The main function.  Calls parser to get the parse tree and interprets it with a new environment.  The returned value is in the environment.
+(define interpret
+  (lambda (file class)
+    (scheme->language
+     (call/cc
+      (lambda (return)
+        (interpret-definitions-list (parser file) (newenvironment) return
+                                  (lambda (env) (myerror "Break used outside of loop"))
+                                  (lambda (env) (myerror "Continue used outside of loop"))
+                                  (lambda (v env) (myerror "Uncaught exception thrown"))
+                                  (parser file) class))))))
+
+; interprets a list of global variable definitions and function definitions.
+; This gets called on first to get all global variable and function definitions in the outer layer of the environment.
+; once the entire statement-list of definitions is interpreted (i.e. it is null),
+; interpret-main is called on so the main function of the code can be run next.
+(define interpret-definitions-list
+  (lambda (statement-list environment return break continue throw original-statement-list class)
+    (if (null? statement-list)
+        (interpret-main-list original-statement-list environment return break continue throw class)
+        (interpret-definitions-list (get-the-rest statement-list)
+                                    (interpret-definitions (statement-type statement-list) environment
+                                                           return break continue throw original-statement-list)
+                                    return break continue throw original-statement-list class))))
+
+; interprets a single statement definition. Since only global variable and function definitions will be in the outer layer,
+; only function, var, and = statement-types are accounted for.
+(define interpret-definitions
+  (lambda (statement environment return break continue throw original-statement-list)
+    (cond
+      ((eq? 'class (statement-type statement)) (interpret-class statement environment))
+      (else environment))))
+
+; interprets a class
+(define interpret-class
+  (lambda (statement environment)
+    (insert (get-class-name statement) (make-class-closure statement environment) environment)))
+
+; locates the class that has the desired main function within it, and calls interpret-main it, to then interpret the main function
+(define interpret-main-list
+  (lambda (statement-list environment return break continue throw class)
+    (cond
+      ((null? statement-list)
+       ('error "no main function"))
+      ((eq? (get-class-name (statement-type statement-list)) class)
+       (interpret-main (get-class-statement-list (statement-type statement-list))
+                       environment return break continue throw class))
+      (else (interpret-main-list (get-the-rest statement-list)
+                            environment return break continue throw class)))))
+
+; locates the main function within the desired class, and calls on it to be interpreted
+(define interpret-main
+  (lambda (statement-list environment return break continue throw class)
+    (cond
+      ((eq? (get-function statement-list) 'main) (interpret-statement-list (get-main-body statement-list)
+                                 (push-frame environment)
+                                 return break continue throw (lookup class environment)))
+      (else (interpret-main (get-the-rest statement-list) environment return break continue throw class)))))
+
+; interprets a list of statements.  The environment from each statement is used for the next ones.
+; Mstate (<statement><statement-list>, state) = Mstate(<statement-list>, Mstate(<statement>, state))
+(define interpret-statement-list
+  (lambda (statement-list environment return break continue throw compile-type)
+    (if (null? statement-list)
+        environment
+        (interpret-statement-list (get-the-rest statement-list)
+                                  (interpret-statement (statement-type statement-list)
+                                                       environment return break continue throw compile-type)
+                                  return break continue throw compile-type))))
+
+; interpret a statement in the environment with continuations for return, break, continue, throw
+(define interpret-statement
+  (lambda (statement environment return break continue throw compile-type)
+    (cond
+      ((or (eq? 'function (statement-type statement)) (eq? 'static-function (statement-type statement)))
+       (interpret-nested-function statement environment return break continue throw compile-type))
+       
+      ((eq? 'funcall (statement-type statement)) (interpret-function-state statement environment return break continue throw compile-type))
+      ((eq? 'return (statement-type statement)) (interpret-return statement environment return throw compile-type))
+      ((eq? 'var (statement-type statement)) (interpret-declare statement environment throw compile-type))
+      ((eq? '= (statement-type statement)) (interpret-assign statement environment throw compile-type))
+      ((eq? 'if (statement-type statement)) (interpret-if statement environment return break continue throw compile-type))
+      ((eq? 'while (statement-type statement)) (interpret-while statement environment return throw compile-type))
+      ((eq? 'continue (statement-type statement)) (continue environment))
+      ((eq? 'break (statement-type statement)) (break environment))
+      ((eq? 'begin (statement-type statement)) (interpret-block statement environment return break continue throw compile-type))
+      ((eq? 'throw (statement-type statement)) (interpret-throw statement environment throw compile-type))
+      ((eq? 'try (statement-type statement)) (interpret-try statement environment return break continue throw compile-type))
+      (else (myerror "Unknown statement:" (statement-type statement))))))
+
+; interpret-function for a given function name as a statement in the environment with continuations for return, break, continue, throw
+(define interpret-function-definition
+  (lambda (statement environment class)
+    (insert (get-function-name statement)
+            (make-function-closure statement environment class)
+            environment)))
+
+; interprets functions that are defined inside of other functions
+(define interpret-nested-function
+  (lambda (statement environment return break continue throw compile-type)
+    (insert (get-function-name statement)
+            (make-function-closure statement environment (get-containing-class compile-type))
+            environment)))
+
+; helper method to create function closure, as defined in the denotational semantics
+(define make-function-closure
+  (lambda (statement environment class)
+    (list (cons 'this (get-formal-params statement)) (get-function-body statement)
+          (lambda (env) (function-environment statement (get-outer-layer-vlist env) env))
+          class)))
+
+; helper method to create class closure
+; contains the super class, parent fields and method list
+(define make-class-closure
+  (lambda (statement environment)
+    (list (get-super-class statement)
+          (add-parent-fields (get-closure (interpret-instancefields-list
+                                           (get-class-statement-list statement)
+                                           (newenvironment)))
+                             (get-super-class statement)
+                             environment)
+          (get-closure (interpret-methods-list
+                        (get-class-statement-list statement)
+                        (newenvironment)
+                        (get-class-name statement)))
+                        )))
+
+; helper method to create instance closure, listing the class name and evaluated instance values
+(define make-instance-closure
+  (lambda (statement environment compile-type)
+    (list (get-class-name statement) (get-instance-values (get-class-name statement) environment compile-type))))
+
+; interprets only the instance fields inside a class
+(define interpret-instancefields-list
+  (lambda (statement-list environment)
+    (if (null? statement-list)
+        environment
+        (interpret-instancefields-list (get-the-rest statement-list)
+                                       (interpret-instancefields (statement-type statement-list) environment)))))
+
+; interprets one statement. Only does anything if that statement is an instance field definition
+(define interpret-instancefields
+  (lambda (statement environment)
+    (cond
+      ((eq? 'var (statement-type statement))
+       (interpret-declare-noeval statement environment))
+      (else environment))))
+
+; interprets only the methods inside a class
+(define interpret-methods-list
+  (lambda (statement-list environment class)
+    (if (null? statement-list)
+        environment
+        (interpret-methods-list (get-the-rest statement-list)
+                                (interpret-methods (statement-type statement-list)
+                                                   environment class)
+                                class))))
+
+; interprets one statement. Only does anything if that statement is a method definition
+(define interpret-methods
+  (lambda (statement environment class)
+    (cond
+      ((or (eq? 'function (statement-type statement)) (eq? 'static-function (statement-type statement)))
+       (interpret-function-definition statement environment class))
+      (else environment))))
+
+; helper method to create the function environment. Called on from the function within the closure
+; if a function definition is a member in another function's body, then that function's environment is passed through
+(define function-environment
+  (lambda (statement outerlayer-vlist environment)
+    (cond
+      ((null? outerlayer-vlist)
+       (list (get-outer-layer environment)))
+      ((or (number? (unbox (get-closure outerlayer-vlist))) (eq? (length (unbox (get-closure outerlayer-vlist))) 1))
+       (function-environment statement
+                             (get-the-rest outerlayer-vlist)
+                             environment))
+      ((member?* 'function (get-closure-body (unbox (get-closure outerlayer-vlist))))
+       environment)
+      (else (function-environment statement (get-the-rest outerlayer-vlist) environment)))))
+
+; M-integer interpret function, identifies the return-value for a given function in the environment with a continuation for throw
+(define interpret-function-integer
+  (lambda (statement environment throw compile-type)
+    (call/cc
+     (lambda (return)
+      (let* ((dot (make-dot (get-dot statement)))
+           (run-type (lookup (get-instance-class (interpret-dot  environment throw compile-type #t)) environment))
+           (closure (lookup-func-cond (get-funcall-name dot) (cons (get-class-methods run-type) '()) environment (get-parent run-type)))
+           (fstate1 ((get-closure-environment closure) environment))
+           (fstate2 (push-frame fstate1))
+           (fstate3
+            (bind-parameters (get-closure-formal-params closure)
+                             (cons (get-this (get-dot-left dot) environment throw compile-type) (get-argument-list statement))
+                             fstate2 environment throw compile-type))
+           (new-compile-type (lookup (get-function-class closure) environment)))
+      (cond
+        ((not (eq? (length (get-closure-formal-params closure)) (+ (length (get-funcall-params statement)) 1)))
+        (myerror "Error: mismatched-number-of-parameters"))
+        (else (interpret-statement-list (get-closure-body closure) fstate3 return
+                                  (lambda (s) ('error "break-out-of-loop"))
+                                  (lambda (s) ('error "no-return-statement"))
+                                  throw new-compile-type))))))))
+
+; M-state interpret function, updates the environment with the given function with continuations for return, break, continue, throw
+(define interpret-function-state
+  (lambda (statement environment return break continue throw compile-type)
+    (let* ((dot (make-dot (get-dot statement)))
+           (run-type (lookup (get-instance-class (interpret-dot dot environment throw compile-type #t)) environment))
+           (closure (lookup-func-cond (get-funcall-name dot) (cons (get-class-methods run-type) '()) environment (get-parent run-type)))
+           (fstate1 ((get-closure-environment closure) environment))
+           (fstate2 (push-frame fstate1))
+           (fstate3
+            (bind-parameters (get-closure-formal-params closure)
+                             (cons (get-this (get-dot-left dot) environment throw compile-type) (get-argument-list statement))
+                             fstate2 environment throw compile-type))
+           (new-compile-type (lookup (get-function-class closure) environment)))
+      (cond
+        ((not (eq? (length (get-closure-formal-params closure)) (+ (length (get-funcall-params statement)) 1)))
+        (myerror "Error: mismatched-number-of-parameters"))
+        ((and (eq? (noreturn? (get-closure-body closure)) #t) (not (null? (interpret-statement-list (get-closure-body closure) fstate3
+                                (lambda (v) environment)
+                                (lambda (s) ('error "break-out-of-loop"))
+                                (lambda (s) (continue s))
+                                throw new-compile-type)))) environment)
+        (else (interpret-statement-list (get-closure-body closure) fstate3
+                                (lambda (v) environment)
+                                (lambda (s) ('error "break-out-of-loop"))
+                                (lambda (s) (continue s))
+                                throw new-compile-type))))))
+
+; binds the actual parameters to the formal parameters
+(define bind-parameters
+  (lambda (params args fstate environment throw compile-type)
+    (cond
+      ((null? params) fstate)
+      ((eq? (get-var-params params) 'this)
+       (bind-parameters (get-the-rest params) (get-the-rest args)
+                        (insert (get-var-params params) (get-expr-args args) fstate)
+                        environment throw compile-type))
+      (else (bind-parameters (get-the-rest params) (get-the-rest args)
+                             (insert (get-var-params params)
+                                     (eval-expression (get-expr-args args) environment throw compile-type)
+                                     fstate)
+                             environment throw compile-type)))))
+      
+; Calls the return continuation with the given expression value
+(define interpret-return
+  (lambda (statement environment return throw compile-type)
+        (return (eval-expression (get-expr statement) environment throw compile-type))))
+
+; Adds a new variable binding to the environment.  There may be an assignment with the variable
+(define interpret-declare
+  (lambda (statement environment throw compile-type)
+    (cond
+      ((exists-declare-value? statement)
+        (insert (get-declare-var statement)
+                (eval-expression (get-declare-value statement) environment throw compile-type)
+                environment))
+      (else (insert (get-declare-var statement) 'novalue environment)))))
+
+; For instance field initial expressions. We do not want the expressions to be evaluated
+(define interpret-declare-noeval
+  (lambda (statement environment)
+    (cond
+      ((exists-declare-value? statement)
+        (insert (get-declare-var statement)
+                (get-declare-value statement)
+                environment))
+      (else (insert (get-declare-var statement) 'novalue environment)))))
+
+; Updates the environment to add an new binding for a variable
+(define interpret-assign
+  (lambda (statement environment throw compile-type)
+    (cond
+      ((and (eq? (check-for-dot statement) 'dot) (not (null? (update (get-assign-dot statement)
+            (eval-expression (get-assign-rhs statement) environment throw compile-type)
+            (cons (cons
+                   (get-instance-vars (lookup-cond
+                                       (get-instance-class
+                                        (interpret-dot (get-dot statement) environment throw compile-type #t))
+                                       environment compile-type))
+                   (cons (get-instance-vals (interpret-dot (get-dot statement) environment throw compile-type #t)) '())) '())))))
+       environment)
+      (else (update-cond (get-assign-lhs statement)
+            (eval-expression (get-assign-rhs statement) environment throw compile-type)
+            environment compile-type)))))
+
+; We need to check if there is an else condition.  Otherwise, we evaluate the expression and do the right thing.
+(define interpret-if
+  (lambda (statement environment return break continue throw compile-type)
+    (cond
+      ((eval-expression (get-condition statement) environment throw compile-type)
+       (interpret-statement (get-then statement)
+                            environment return break continue throw compile-type))
+      ((exists-else? statement)
+       (interpret-statement (get-else statement)
+                            environment return break continue throw compile-type))
+      (else environment))))
+
+; Interprets a while loop.  We must create break and continue continuations for this loop
+(define interpret-while
+  (lambda (statement environment return throw compile-type)
+    (call/cc
+     (lambda (break)
+       (letrec ((loop (lambda (condition body environment)
+                        (if (eval-expression condition environment throw compile-type)
+                            (loop condition body
+                                  (interpret-statement body environment return break
+                                                       (lambda (env) (break (loop condition body env)))
+                                                       throw compile-type))
+                         environment))))
+         (loop (get-condition statement) (get-body statement) environment))))))
+
+; Interprets a block.  The break, continue, and throw continuations must be adjusted to pop the environment
+; Mstate({ <body> }, state) = pop-frame (Mstate (<body>, pushframe(state)))
+(define interpret-block
+  (lambda (statement environment return break continue throw compile-type)
+    (pop-frame (interpret-statement-list (get-the-rest statement)
+                                         (push-frame environment)
+                                         return
+                                         (lambda (env) (break (pop-frame env)))
+                                         (lambda (env) (continue (pop-frame env)))
+                                         (lambda (v env) (throw v (pop-frame env)))
+                                         compile-type))))
+
+; We use a continuation to throw the proper value. Because we are not using boxes,
+; the environment/state must be thrown as well so any environment changes will be kept
+(define interpret-throw
+  (lambda (statement environment throw compile-type)
+    (throw (eval-expression (get-expr statement) environment throw compile-type) environment)))
+
+
+; Interpret a try-catch-finally block:
+
+; Create a continuation for the throw.  If there is no catch, it has to interpret the finally block, and once that completes throw the exception.
+; Otherwise, it interprets the catch block with the exception bound to the thrown value and interprets the finally block when the catch is done
+(define create-throw-catch-continuation
+  (lambda (catch-statement environment return break continue throw compile-type jump finally-block)
+    (cond
+      ((null? catch-statement)
+       (lambda (ex env) (throw ex (interpret-block finally-block env return break continue throw compile-type)))) 
+      ((not (eq? 'catch (statement-type catch-statement)))
+       (myerror "Incorrect catch statement"))
+      (else (lambda (ex env)
+              (jump (interpret-block finally-block
+                                     (pop-frame (interpret-statement-list 
+                                                 (get-body catch-statement) 
+                                                 (insert (catch-var catch-statement) ex (push-frame environment))
+                                                 return 
+                                                 (lambda (env2) (break (pop-frame env2))) 
+                                                 (lambda (env2) (continue (pop-frame env2))) 
+                                                 (lambda (v env2) (throw v (pop-frame env2)))
+                                                 compile-type))
+                                     return break continue throw compile-type)))))))
+
+; To interpret a try block, we must adjust  the return, break, continue continuations to interpret the finally block if any of them are used.
+; Creates a new throw continuation and then interpret the try block with the new continuations followed by the finally block with the old continuations
+(define interpret-try
+  (lambda (statement environment return break continue throw compile-type)
+    (call/cc
+     (lambda (jump)
+       (let* ((finally-block (make-finally-block (get-finally statement)))
+              (try-block (make-try-block (get-try statement)))
+              (new-return
+               (lambda (v) (begin
+                             (interpret-block finally-block environment return break continue throw compile-type)
+                             (return v))))
+              (new-break
+               (lambda (env) (break
+                              (interpret-block finally-block env return break continue throw compile-type))))
+              (new-continue
+               (lambda (env) (continue
+                              (interpret-block finally-block env return break continue throw compile-type))))
+              (new-throw
+               (create-throw-catch-continuation
+                (get-catch statement)
+                environment return break continue throw compile-type jump finally-block)))
+         (interpret-block finally-block
+                          (interpret-block try-block environment new-return new-break new-continue new-throw compile-type)
+                          return break continue throw compile-type))))))
+
+; helper methods so that to reuse the interpret-block method on the try and finally blocks
+(define make-try-block
+  (lambda (try-statement)
+    (cons 'begin try-statement)))
+
+; helper method to manually create a block for a finally statement using 'begin
+(define make-finally-block
+  (lambda (finally-statement)
+    (cond
+      ((null? finally-statement)
+       '(begin))
+      ((not (eq? (statement-type finally-statement) 'finally))
+       (myerror "Incorrectly formatted finally block"))
+      (else (cons 'begin (cadr finally-statement))))))
+
+; interprets the dot operator, interpreting the left size of the dot before the right, as the left call is inside of there right call
+(define interpret-dot
+  (lambda (statement environment throw compile-type funcall)
+    (interpret-dot-right (get-dot-right statement)
+                         (interpret-dot-left (get-dot-left statement) environment throw compile-type)
+                         environment throw compile-type funcall)))
+
+; interprets the left hand side of the dot operator
+(define interpret-dot-left
+  (lambda (instance environment throw compile-type)
+    (cond
+      ((eq? instance 'this) (lookup 'this environment))
+      ((eq? instance 'super) (make-instance-closure (make-super-instance compile-type) environment compile-type))
+      ((and (list? instance) (eq? (operator instance) 'funcall))
+       (interpret-function-integer instance environment throw compile-type))
+      ((list? instance) (make-instance-closure instance environment compile-type))
+      (else (lookup-cond instance environment compile-type)))))
+
+; interprets the right hand side of the dot operator
+(define interpret-dot-right
+  (lambda (expr instance environment throw compile-type funcall)
+    (cond
+      ((eq? funcall #t) instance)
+      (else (eval-expression expr
+                             (cons (cons (get-instance-vars (lookup (get-instance-class instance) environment))
+                                         (cons (get-instance-vals instance) '()))
+                                   '())
+                             throw compile-type)))))
+
+; returns the correct 'this' instance, in case a super is used in the dot operator
+(define get-this
+  (lambda (instance environment throw compile-type)
+    (cond
+      ((eq? instance 'this) (lookup 'this environment)) 
+      ((eq? instance 'super) (lookup 'this environment))
+      ((and (list? instance) (eq? (operator instance) 'funcall))
+       (interpret-function-integer instance environment throw compile-type))
+      ((list? instance) (make-instance-closure instance environment compile-type))
+      (else (lookup-cond instance environment compile-type)))))
+
+; Evaluates all possible boolean and arithmetic expressions, including constants and variables.
+(define eval-expression
+  (lambda (expr environment throw compile-type)
+    (cond
+      ((number? expr)
+       expr)
+      ((eq? expr 'true)
+       #t)
+      ((eq? expr 'false)
+       #f)
+      ((eq? expr 'novalue)
+       0)
+      ((not (list? expr))
+       (lookup-cond expr environment compile-type))
+      ((eq? 'funcall (operator expr))
+       (interpret-function-integer expr environment throw compile-type))
+      (else (eval-operator expr environment throw compile-type)))))
+
+; Evaluate a binary (or unary) operator.  Although this is not dealing with side effects, I have the routine evaluate the left operand first and then
+; pass the result to eval-binary-op2 to evaluate the right operand.  This forces the operands to be evaluated in the proper order in case you choose
+; to add side effects to the interpreter
+(define eval-operator
+  (lambda (expr environment throw compile-type)
+    (cond
+      ((eq? '! (operator expr))
+       (not (eval-expression (operand1 expr) environment throw compile-type)))
+      ((and (eq? '- (operator expr)) (= 2 (length expr)))
+       (- (eval-expression (operand1 expr) environment throw compile-type)))
+      ((eq? 'new (operator expr))
+       (make-instance-closure expr environment compile-type))
+      ((eq? 'dot (operator expr))
+       (interpret-dot expr environment throw compile-type #f))
+      (else (eval-binary-op2 expr (eval-expression (operand1 expr) environment throw compile-type) environment throw compile-type)))))
+
+; Complete the evaluation of the binary operator by evaluating the second operand and performing the operation.
+(define eval-binary-op2
+  (lambda (expr op1value environment throw compile-type)
+    (cond
+      ((eq? '+ (operator expr)) (+ op1value (eval-expression (operand2 expr) environment throw compile-type)))
+      ((eq? '- (operator expr)) (- op1value (eval-expression (operand2 expr) environment throw compile-type)))
+      ((eq? '* (operator expr)) (* op1value (eval-expression (operand2 expr) environment throw compile-type)))
+      ((eq? '/ (operator expr)) (quotient op1value (eval-expression (operand2 expr) environment throw compile-type)))
+      ((eq? '% (operator expr)) (remainder op1value (eval-expression (operand2 expr) environment throw compile-type)))
+      ((eq? '== (operator expr)) (isequal op1value (eval-expression (operand2 expr) environment throw compile-type)))
+      ((eq? '!= (operator expr)) (not (isequal op1value (eval-expression (operand2 expr) environment throw compile-type))))
+      ((eq? '< (operator expr)) (< op1value (eval-expression (operand2 expr) environment throw compile-type)))
+      ((eq? '> (operator expr)) (> op1value (eval-expression (operand2 expr) environment throw compile-type)))
+      ((eq? '<= (operator expr)) (<= op1value (eval-expression (operand2 expr) environment throw compile-type)))
+      ((eq? '>= (operator expr)) (>= op1value (eval-expression (operand2 expr) environment throw compile-type)))
+      ((eq? '|| (operator expr)) (or op1value (eval-expression (operand2 expr) environment throw compile-type)))
+      ((eq? '&& (operator expr)) (and op1value (eval-expression (operand2 expr) environment throw compile-type)))
+      (else (myerror "Unknown operator:" (operator expr))))))
+
+; Determines if two values are equal.  We need a special test because there are both boolean and integer types.
+(define isequal
+  (lambda (val1 val2)
+    (if (and (number? val1) (number? val2))
+        (= val1 val2)
+        (eq? val1 val2))))
+
+
+;-----------------
+; HELPER FUNCTIONS
+;-----------------
+
+; These helper functions define the operator and operands of a value expression
+(define operator car)
+(define operand1 cadr)
+(define operand2 caddr)
+(define operand3 cadddr)
+
+; These two helper functions check if particular operands exist or not
+; check for operand2
+(define exists-operand2?
+  (lambda (statement)
+    (not (null? (cddr statement)))))
+
+; check for operand3
+(define exists-operand3?
+  (lambda (statement)
+    (not (null? (cdddr statement)))))
+
+; These helper functions define the parts of the various statement types
+(define statement-type operator)
+(define get-expr operand1)
+(define get-function-name operand1)
+(define get-funcall-name caddr)
+(define get-formal-params operand2)
+(define get-function-body operand3)
+(define get-funcall-params cddr)
+(define get-function-class cadddr) 
+(define get-var-params car)
+(define get-expr-args car)
+(define get-closure-environment caddr)
+(define get-closure-formal-params car)
+(define get-closure-body cadr)
+(define get-argument-list cddr)
+(define get-declare-var operand1)
+(define get-declare-value operand2)
+(define exists-declare-value? exists-operand2?)
+(define get-assign-lhs operand1)
+(define get-assign-rhs operand2)
+(define get-condition operand1)
+(define get-then operand2)
+(define get-else operand3)
+(define get-body operand2)
+(define exists-else? exists-operand3?)
+(define get-try operand1)
+(define get-catch operand2)
+(define get-finally operand3)
+(define get-closure car)
+(define get-the-rest cdr)
+
+; Returns the class that a nested function is contained in
+(define get-containing-class
+  (lambda (closure)
+    (cadddr (unbox (caar (cdaddr closure))))))
+    
+
+; method that attatches operand1 to a given statement, particularlly the catch statement
+(define catch-var
+  (lambda (catch-statement)
+    (car (operand1 catch-statement))))
+
+; abstractions for interpret-main
+(define get-statement-type caar)
+(define get-function cadar)
+(define get-main-body
+  (lambda (statement-list)
+    (car (cdddar statement-list))))
+
+; class helperfunctions/abstractions
+(define get-super-class
+  (lambda (statement)
+    (cond
+      ((null? (caddr statement)) '())
+      (else (cadr (caddr statement))))))
+
+; if a class is extending another class, then the instance variables and expressions must be added to the end of the class's instance variables and expressions
+(define add-parent-fields
+  (lambda (field parent environment)
+    (cond
+      ((null? parent) field)
+      (else (cons (append (get-vars field)
+                          (get-instance-vars (lookup parent environment)))
+                  (cons (append (get-exps field)
+                                (get-instance-exps (lookup parent environment)))
+                        '()))))))
+
+; Instance abstractions
+(define get-class-statement-list cadddr)
+(define get-class-name cadr)
+(define get-instance-vars caadr)
+(define get-instance-exps cadadr)
+(define get-class-methods caddr)
+(define get-parent car)
+(define get-vars car)
+(define get-exps cadr)
+(define get-instance-expressions cadadr)
+(define get-instance-class car)
+(define get-instance-vals cadr)					   
+
+; Creates s class closure that is a super class							
+(define make-super-instance
+  (lambda (closure)
+    (cons 'new (cons (get-instance-class closure) '()))))
+
+; Creates an instance closure
+(define make-this-instance
+  (lambda (closure)
+    (cons 'new (cons (get-instance-class closure) '()))))
+
+; instance helperfunctions/abstractions
+(define get-instance-values
+  (lambda (class environment compile-type)
+      (eval-all (get-instance-expressions (lookup class environment)) environment compile-type)))
+
+; evaluates all instance expressions in the class closure
+(define eval-all
+  (lambda (field environment compile-type)
+    (cond
+      ((null? field) '())
+      (else (cons (box (eval-expression (unbox (statement-type field))
+                                        environment
+                                        (lambda (v env) (myerror "Uncaught exception thrown"))
+                                        compile-type))
+                  (eval-all (get-the-rest field) environment compile-type))))))
+
+; dot operator abstractions
+(define get-dot-right caddr)
+(define get-dot-left cadr)
+(define get-dot cadr)
+(define check-for-dot
+  (lambda (statement)
+    (cond
+      ((list? (operand1 statement)) (caadr statement))
+      (else (operand1 statement)))))
+(define get-assign-dot (lambda (statement) (car (cddadr statement))))
+(define get-next-instance cadadr)
+(define get-next-funcall (lambda (statement) (car (cadadr statement))))
+
+; Makes a dot expression, useful in calls needing 'this' operator										   
+(define make-dot
+  (lambda (statement)
+    (cond
+      ((list? statement) statement)
+      (else (cons 'dot (cons 'this (cons statement '())))))))
+
+;------------------------
+; Environment/State Functions
+;------------------------
+
+; returns the variable list of the environment
+(define get-vlist
+  (lambda (env)
+    (cond
+      ((null? env)
+       '())
+      (else (cons (caar env) (get-vlist (cdr env)))))))
+
+; returns the assigned-value list of the environment
+(define get-alist
+  (lambda (env)
+    (cond
+      ((null? env)
+       '())
+      (else (cons (cadar env) (get-alist (cdr env)))))))
+
+; returns the outermost layer's variable list
+(define get-outer-layer-vlist
+  (lambda (environment)
+    (cadr (get-outer-layer environment))))
+
+; returns the outermost layer of the state
+(define get-outer-layer
+  (lambda (environment)
+    (cond
+      ((null? (cdr environment))
+       (car environment))
+      (else (get-outer-layer (cdr environment))))))
+
+; create a new empty environment
+(define newenvironment
+  (lambda ()
+    (list (newframe))))
+
+; create an empty frame: a frame is two lists, the first are the variables and the second is the "store" of values
+(define newframe
+  (lambda ()
+    '(() ())))
+
+; add a frame onto the top of the environment
+(define push-frame
+  (lambda (environment)
+    (cons (newframe) environment)))
+
+; remove a frame from the environment
+(define pop-frame
+  (lambda (environment)
+    (if (null? (cdr environment))
+        environment
+        (cdr environment))))
+
+; abstractions for parts of a given frame
+(define topframe car)
+(define remainingframes cdr)
+
+; does a variable exist in the environment?
+(define exists?
+  (lambda (var environment)
+    (cond
+      ((null? environment)
+       #f)
+      ((exists-in-list? var (variables (topframe environment)))
+       #t)
+      (else (exists? var (remainingframes environment))))))
+
+; does a variable exist in a list?
+(define exists-in-list?
+  (lambda (var l)
+    (cond
+      ((null? l)
+       #f)
+      ((eq? var (car l))
+       #t)
+      (else (exists-in-list? var (cdr l))))))
+
+; Looks up a value in the environment.  If the value is a boolean, it converts our languages boolean type to a Scheme boolean type
+(define lookup
+  (lambda (var environment)
+    (lookup-variable var environment)))
+
+; Used to decide whether the variable is in the local environment, or the non-static instance
+(define lookup-cond
+  (lambda (var environment compile-type)
+    (cond
+      ((eq? 'error (lookup-variable-err var environment))
+       (lookup-index var environment compile-type))
+      (else (lookup-variable var environment)))))
+
+; Uses the reverse-indexing that Connamacher talked about in lecture
+(define lookup-index
+  (lambda (var environment compile-type)
+    (cond
+      ((not (member?* 'this environment)) (lookup var environment))
+      (else (lookup-with-index (get-index var (get-instance-vars compile-type) #f)
+                               (reverse (get-instance-vals (lookup 'this environment))))))))
+
+; Gets the index of a given variable in the instance fields list
+(define get-index
+  (lambda (var list seen?)
+    (cond
+      ((null? list) 0)
+      ((eq? seen? #t) (+ 1 (get-index var (cdr list) seen?)))
+      ((eq? (operator list) var) (+ 0 (get-index var (cdr list) #t)))
+      (else (+ 0 (get-index var (cdr list) seen?))))))
+
+; Looks up the given variable using a given index
+(define lookup-with-index
+  (lambda (index list)
+    (cond
+      ((eq? index 0) (unbox (operator list)))
+      (else (lookup-with-index (- index 1) (cdr list))))))
+
+; looks up a function in the local environmentl. If it is not there, it goes to the non-static environments
+(define lookup-func-cond
+  (lambda (var environment og-env parent)
+    (cond
+      ((eq? 'error (lookup-variable-err var og-env)) (lookup-func var environment og-env parent))
+      (else (lookup-variable var og-env)))))
+
+; function look up helper method
+(define lookup-func
+  (lambda (var environment og-env parent)
+    (cond
+      ((null? parent) (lookup-variable var environment))
+      ((eq? 'error (lookup-variable-err var environment))
+       (lookup-func var
+                    (cons (get-class-methods(lookup parent og-env)) '())
+                    og-env (get-parent (lookup parent og-env))))
+      (else (lookup-variable var environment)))))
+  
+; A helper function that does the lookup.  Returns an error if the variable does not have a legal value
+(define lookup-variable
+  (lambda (var environment)
+    (let ((value (lookup-in-env var environment)))
+      (if (eq? 'novalue (unbox value))
+          (myerror "error: variable without an assigned value:" var)
+          (unbox value)))))
+
+; Return the value bound to a variable in the environment
+(define lookup-in-env
+  (lambda (var environment)
+    (cond
+      ((null? environment)
+       (myerror "error: undefined variable" var))
+      ((exists-in-list? var (variables (topframe environment)))
+       (lookup-in-frame var (topframe environment)))
+      (else (lookup-in-env var (cdr environment))))))
+
+; Return the value bound to a variable in the frame
+(define lookup-in-frame
+  (lambda (var frame)
+    (cond
+      ((not (exists-in-list? var (variables frame)))
+       (myerror "error: undefined variable" var))
+      (else (language->scheme (get-value (indexof var (variables frame)) (store frame)))))))
+
+; A helper function that does the lookup.  Returns an error if the variable does not have a legal value
+(define lookup-variable-err
+  (lambda (var environment)
+    (let ((value (lookup-in-env-err var environment)))
+      (cond
+        ((eq? 'error value) 'error)
+        ((eq? 'novalue (unbox value))
+          'error)
+          (else (unbox value))))))
+
+; Return the value bound to a variable in the environment
+(define lookup-in-env-err
+  (lambda (var environment)
+    (cond
+      ((null? environment)
+       'error)
+      ((exists-in-list? var (variables (topframe environment)))
+       (lookup-in-frame-err var (topframe environment)))
+      (else (lookup-in-env-err var (cdr environment))))))
+
+; Return the value bound to a variable in the frame
+(define lookup-in-frame-err
+  (lambda (var frame)
+    (cond
+      ((not (exists-in-list? var (variables frame)))
+       'error)
+      (else (language->scheme (get-value (indexof var (variables frame)) (store frame)))))))
+
+; Get the location of a name in a list of names
+(define indexof
+  (lambda (var l)
+    (cond
+      ((null? l) ; should not happen
+       0)
+      ((eq? var (car l))
+       0)
+      (else (+ 1 (indexof var (cdr l)))))))
+
+; Get the value stored at a given index in the list
+(define get-value
+  (lambda (n l)
+    (cond
+      ((zero? n)
+       (car l))
+      (else (get-value (- n 1) (cdr l))))))
+
+; Adds a new variable/value binding pair into the environment.  Gives an error if the variable already exists in this frame.
+(define insert
+  (lambda (var val environment)
+    (if (exists-in-list? var (variables (car environment)))
+        (myerror "error: variable is being re-declared:" var)
+        (cons (add-to-frame var (box val) (car environment))
+              (cdr environment)))))
+
+; Used to decide whether the variable is in the local environment, or the non-static instance
+(define update-cond
+  (lambda (var val environment compile-type)
+    (cond
+      ((and (eq? 'error (update-err var val environment)) (not (null? (update-index var val environment compile-type))))
+       environment)
+      (else (update var val environment)))))
+
+; Changes the binding of a variable to a new value in the environment.  Gives an error if the variable does not exist.
+(define update
+  (lambda (var val environment)
+    (if (exists? var environment)
+        (update-existing var val environment)
+        (myerror "error: variable used but not defined:" var))))
+
+; Changes the binding of a variable to a new value in the environment.  Gives an error if the variable does not exist.
+(define update-err
+  (lambda (var val environment)
+    (if (exists? var environment)
+        (update-existing var val environment)
+        'error)))
+
+; Uses the reverse-indexing that Connamacher talked about in lecture
+(define update-index
+  (lambda (var val environment compile-type)
+    (cond
+      ((not (member?* 'this environment)) (update var val environment))
+      (else (update-with-index (get-index var (get-instance-vars compile-type) #f)
+                               val
+                               (reverse (get-instance-vals (lookup 'this environment))))))))
+
+; Looks up the given variable using a given index
+(define update-with-index
+  (lambda (index val list)
+    (cond
+      ((eq? index 0) (boxsetter (operator list) val))
+      (else (update-with-index (- index 1) val (cdr list))))))
+
+; Add a new variable/value pair to the frame.
+(define add-to-frame
+  (lambda (var val frame)
+    (list (cons var (variables frame))
+          (cons (scheme->language val) (store frame)))))
+
+; Changes the binding of a variable in the environment to a new value
+(define update-existing
+  (lambda (var val environment)
+    (if (exists-in-list? var (variables (car environment)))
+        (cons (update-in-frame var val (topframe environment))
+              (remainingframes environment))
+        (cons (topframe environment)
+              (update-existing var val (remainingframes environment))))))
+
+; Changes the binding of a variable in the frame to a new value.
+(define update-in-frame
+  (lambda (var val frame)
+    (list (variables frame)
+          (update-in-frame-store var val (variables frame) (store frame)))))
+
+; Changes a variable binding by placing the new value in the appropriate place in the store
+(define update-in-frame-store
+  (lambda (var val varlist vallist)
+    (cond
+      ((eq? var (car varlist))
+       (cons (boxsetter (car vallist) (scheme->language val))
+             (cdr vallist)))
+      (else (cons (car vallist)
+                  (update-in-frame-store var val (cdr varlist) (cdr vallist)))))))
+
+; Returns the list of variables from a frame
+(define variables
+  (lambda (frame)
+    (car frame)))
+
+; Returns the store from a frame
+(define store
+  (lambda (frame)
+    (cadr frame)))
+
+; Functions to convert the Scheme #t and #f to our languages true and false, and back.
+; language booleans to scheme
+(define language->scheme
+  (lambda (v) 
+    (cond 
+      ((eq? v 'false)
+       #f)
+      ((eq? v 'true)
+       #t)
+      (else v))))
+
+; scheme booleans to language
+(define scheme->language
+  (lambda (v)
+    (cond
+      ((eq? v #f)
+       'false)
+      ((eq? v #t)
+       'true)
+      (else v))))
+
+; Because the error function is not defined in R5RS scheme, I create my own:
+(define error-break (lambda (v) v))
+(call-with-current-continuation (lambda (k) (set! error-break k)))
+
+; Creates an error given a string and values to throw
+(define myerror
+  (lambda (str . vals)
+    (letrec ((makestr (lambda (str vals)
+                        (if (null? vals)
+                            str
+                            (makestr (string-append str
+                                                    (string-append " " (symbol->string (car vals))))
+                                     (cdr vals))))))
+      (error-break (display (string-append str (makestr "" vals)))))))
+
+; member?*: determines if an atom is inside a list (possibly a list of lists)
+(define member?*
+  (lambda (a list)
+    (cond
+      ((null? list)
+       #f)
+      ((list? (car list))
+       (or (member?* a (car list))
+           (member?* a (cdr list))))
+      ((eq? a (car list))
+       #t)
+      (else (member?* a (cdr list))))))
+
+; myappend-cps
+; given in class
+(define myappend-cps
+  (lambda (list1 list2 return)
+    (cond
+      ((null? list1) (return list2))
+      (else (myappend-cps (cdr list1) list2
+                          (lambda (v) (return (cons (car list1) v))))))))
+
+; flatten-cps: '(a (b c (d e)) (f)))) => '(a b c d e f)
+; given in class
+(define flatten-cps
+  (lambda (list return)
+    (cond
+      ((null? list) (return '()))
+      ((list? (car list))
+       (flatten-cps (car list)
+                    (lambda (v1) (flatten-cps (cdr list)
+                                              (lambda (v2) (myappend-cps v1 v2 return))))))
+      (else (flatten-cps (cdr list) (lambda (v) (return (cons (car list) v))))))))
+
+; Helper method that calls the non functional set-box! on a box and a value to update the box, and then manually returns the updated box.
+(define boxsetter
+  (lambda (box thing)
+    (begin (set-box! box thing) box)))
+
+; noreturn?: returns true if there is no return in a given function body
+(define noreturn?
+  (lambda (function)
+    (cond
+      ((null? function) #t)
+      ((list? (car function)) (and (noreturn? (car function)) (noreturn? (cdr function))))
+      ((eq? 'return (car function)) #f)
+      (else (noreturn? (cdr function))))))
