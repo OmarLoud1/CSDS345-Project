@@ -263,7 +263,8 @@
 
 (define makeDotExp
   (lambda (expr)
-      (((list? expr) expr)
+    (cond
+      ((list? expr) expr)
       (else (cons 'dot (cons 'this (cons expr '())))))))
 
 (define dotAssignStmt
@@ -449,7 +450,7 @@
   (lambda (val state)
     (let ((rVal (MsearchState val state)))
       (cond
-        [(eq? (unbox value)'$null$)   (error 'gStateError "There was a problem finding a var")]
+        [(eq? (unbox val)'$null$)   (error 'gStateError "There was a problem finding a var")]
         [else (unbox rVal)]))))
 
 (define MsearchState
@@ -463,32 +464,30 @@
   (lambda (val frame)
     (cond
       [(not (inList? val (car frame)))  (error "Could not find variable in frame.")]
-      [(else                                            (MgetStateLayer val frame))])))
+      [else                                            (MgetStateLayer val frame)])))
 
 (define MindexSearch
-  (lambda (val state ctime-type)
+  (lambda (var state ctime-type)
     (cond
-      [(not (memeber?* 'this state))                                                                      (MfindVar val state)]
+      [(not (member?* 'this state))                                                                      (MfindVar var state)]
       [(eq? (hasIndex var (caadr ctime-type)) 0)                                                       (unbox (operator list))]
       [else                                       (MindexSearch (- (hasIndex var (caadr ctime-type)) 1) (cdr (getList state)))])))
-
-(define )
 
 (define inList?
   (lambda (val list)
     (cond
       [(null? list)                                #f]
       [(eq? val (car list))                        #t]
-      [else                  (inList? var (cdr list))])))
+      [else                  (inList? val (cdr list))])))
 
 (define hasIndex
   (lambda (val list)
   (cond 
-    [(eq? var (car list))                                0]
+    [(eq? val (car list))                                0]
     [else                  (+ 1 (hasIndex val (cdr list)))])))
   
 (define getList
-  (labda (state)
+  (lambda (state)
     (reverse (caadr (MfindVar 'this state)))))
 
 
@@ -512,11 +511,11 @@
 (define Mval
   (lambda (expr state throw ctime-type) 
     (cond
-     [(boolexp? expr state)                                                                       (Mbool expr state throw)]
-     [(intexp? expr state)                                                                     (Minteger expr state throw)]
-     [(eq? 'funcall (operator expr))                                                           (MfuncVal expr state throw ctime-type)]
-     [(list? expr)                                                                                                    expr]
-     [else                            (error 'gStateError (string-append "Variable not declared: " (symbol->string expr)))])))
+     [(boolexp? expr state)                                   (Mbool expr state throw)]
+     [(intexp? expr state)                                 (Minteger expr state throw)]
+     [(and (list? expr) (eq? 'funcall (operator expr)))    (MfuncVal expr state throw ctime-type)]
+     [(list? expr)                                                                expr]
+     [else                                                      (MgetState expr state)])))
   
 
 
@@ -706,16 +705,14 @@
   (lambda (expr-list state return break continue throw class)
     (cond
       [(null? expr-list)                            (error "There was a problem handling a function.")]
-      [(eq? (get-class expr-list) class)  (Mmain expr-list state return break continue throw class)]
+      [(eq? (get-class expr-list) class)  (Mmain (getStmtList (firstExpr expr-list)) state return break continue throw class)]
       [else                           (findMain (args expr-list) state return break continue throw class)])))
 
 (define Mmain
   (lambda (expr-list state return break continue throw class)
   (cond
-    [(and (eq? (operator (firstExpr expr-list)) 'function) (eq? (leftoperand (firstExpr expr-list)) `main))
-      (MstateList (mainBody expr-list) (addFrame state) return break continue throw (MgetStateLayer class state))]
-    [else                                                                                                     (Mmain (cdr expr-list) state return break continue throw class)]
-    )))
+    [(eq? (leftoperand (firstExpr expr-list)) `main)  (MstateList (mainBody expr-list) (addFrame state) return break continue throw)]
+    [else                                                                                        (Mmain (args expr-list) state return break continue throw class)])))
 
 (define get-class
   (lambda (expr-list)
@@ -728,8 +725,8 @@
 
 ; Will get and return the class that a given function is contained in
 (define retrieveContainClass
-  (lambda (closure)) 
-    (unboxFromStmtList (caar (getStmtList closure))))
+  (lambda (closure) 
+    (unboxedFromStmtList (caar (getStmtList closure)))))
 
 ; retrieves an unboxed value from the statement list
 (define unboxedFromStmtList (lambda (stmt-list) (getStmtList (unbox stmt-list))))
@@ -738,6 +735,10 @@
 (define functionClosure
   (lambda (expr state class)
     (list (cons 'this (operandn 2 expr)) (operandn 3 expr) (lambda (env) (functionState expr (outerLayerVars env) env)) class)))
+
+(define Mclass
+  (lambda (expr state throw)
+    (Mdeclare (operand expr) (classClosure expr state throw) state throw)))
 
 (define classClosure
   (lambda (expr state throw)
@@ -778,10 +779,10 @@
       (else state))))
 
 (define declareFunction
-  (lambda (expr state class throw)
+  (lambda (expr state class throw ctime-type)
     (Mdeclare (operand expr)
             (functionClosure expr state class)
-            state throw)))
+            state throw ctime-type)))
 
 (define evalDotExpression
   (lambda (expr state throw ctime-type function)
@@ -796,7 +797,7 @@
       ((eq? object 'super) (objectClosure (superObj ctime-type) state ctime-type))
       ((and (list? object) (eq? (operator object) 'funcall)) (MfuncExecuteNoBreak object state throw ctime-type)) 
       ((list? object)      (objectClosure object state ctime-type))
-      (else                (lookup-cond expr state ctime-type))))) ;; need to implement cond
+      (else                ('error "lookup-cond not defined")))));;(lookup-cond expr state ctime-type))))) ;; need to implement cond
 
 (define evalRightDot
   (lambda (expr object state throw ctime-type function)
@@ -905,11 +906,8 @@
 (define Mexpr-global
   (lambda (expr state return break continue throw init-expr-list class)
     (cond
-      [(eq? 'function (operator expr))                          (MfuncDef expr state return break continue throw)]
-      [(eq? '= (operator expr))                      (Massign (leftoperand expr) (rightoperand expr) state throw)]
-      [(eq? 'var (operator expr))                   (Mdeclare (leftoperand expr) (rightoperand expr) state throw)]
-      [(eq? 'class (operator expr))                                               (classClosure expr state throw)]
-      [else                                                          ('error "Unknown Statement outside of Main")])))
+      [(eq? 'class (operator expr))                    (Mclass expr state throw)]
+      [else                        ('error "Unknown Statement outside of Main")])))
 
 
 
@@ -960,7 +958,7 @@
 ; (run-tests 20)
 
 
-(interpret "testI.txt" 'A)
+(interpret "testII.txt" 'B)
 
 
 
