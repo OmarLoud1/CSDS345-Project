@@ -378,7 +378,7 @@
       [(boolexp? expr state)                                                                                          (Mbool expr state throw)]
       [(eq? (operator expr) 'function)                                                                  (MfuncDef expr state throw ctime-type)]
       [(eq? (operator expr) 'funcall)                                           (MfuncState expr state return break continue throw ctime-type)]
-      [(eq? (operator expr) 'return)                                     (return (operand expr) state return break continue throw ctime-type)]
+      [(eq? (operator expr) 'return)                                     (Mreturn (operand expr) state return break continue throw ctime-type)]
       [(eq? (operator expr) 'var)                                     (Mdeclare (leftoperand expr) (rightoperand expr) state throw ctime-type)]
       [(eq? (operator expr) '=)                           (Mupdate (leftoperand expr) (Mval (rightoperand expr) state throw ctime-type) state)]
       [(eq? (operator expr) 'if)      (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw ctime-type)]
@@ -464,6 +464,11 @@
       [(eq? 'err (returnVarIfValid val state)) (findFunc val (getUpdatedState parent pastState) (retrieveParent (find parent pastState)) pastState)]
       [else (findVar val state)])))
 
+(define findCond
+  (lambda (val state pastState parent)
+      (cond
+        ((eq? 'err (returnVarIfValid val pastState)) (indexSearch val state pastState parent))
+        (else (findFunc val pastState)))))
 
 (define findFuncCond
   (lambda (val state pastState parent)
@@ -623,7 +628,7 @@
 
 
 ;returns the value of the expression given
-(define return
+(define Mreturn
   (lambda (expr state return break continue throw ctime-type)
     (cond
       [(eq? (Mval expr state throw ctime-type) #t)                  (return "true")]
@@ -846,7 +851,7 @@
       ((eq? object 'super) (objectClosure (superObj ctime-type) state ctime-type))
       ((and (list? object) (eq? (operator object) 'funcall)) (MfuncExecute object state (lambda (s) ('error "no-return-statement")) throw ctime-type)) 
       ((list? object)      (objectClosure object state ctime-type))
-      (else                (error "lookup-cond not defined")))));;(lookup-cond expr state ctime-type))))) ;; need to implement cond
+      (else                (findFuncCond object state ctime-type))))) ;; need to implement cond
 
 (define evalRightDot
   (lambda (expr object state throw ctime-type function)
