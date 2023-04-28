@@ -380,11 +380,11 @@
       [(eq? (operator expr) 'funcall)                                           (MfuncState expr state return break continue throw ctime-type)]
       [(eq? (operator expr) 'return)                                     (Mreturn (operand expr) state return break continue throw ctime-type)]
       [(eq? (operator expr) 'var)                                     (Mdeclare (leftoperand expr) (rightoperand expr) state throw ctime-type)]
-      [(eq? (operator expr) '=)                           (Mupdate (leftoperand expr) (Mval (rightoperand expr) state throw ctime-type) state)]
+      [(eq? (operator expr) '=)                           (Mupdate (leftoperand expr) (Mval (rightoperand expr) state throw ctime-type) state ctime-type)]
       [(eq? (operator expr) 'if)      (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw ctime-type)]
       [(eq? (operator expr) 'while)                              (Mwhile (leftoperand expr) (rightoperand expr) state return throw ctime-type)]
-      [(eq? (operator expr) 'break)                                                                            (Mbreak state break)] ; does not need to include compile type
-      [(eq? (operator expr) 'continue)                                                                   (Mcontinue state continue)] ; does not need to include compile type
+      [(eq? (operator expr) 'break)                                                                                       (Mbreak state break)] ; does not need to include compile type
+      [(eq? (operator expr) 'continue)                                                                              (Mcontinue state continue)] ; does not need to include compile type
       [(eq? (operator expr) 'begin)                                          (Mbegin (args expr) state return break continue throw ctime-type)]
       [(eq? (operator expr) 'try)    (Mtry (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw ctime-type)]
       [(eq? (operator expr) 'throw)                                                 (throw (Mval (operand expr) state throw ctime-type) state)]
@@ -439,8 +439,17 @@
   (lambda (varName state)
     (cond
       [(null? state)                                                                               '$null$] ; warning, this is a hella hack
-      [(contains? varName (stateVars state))                          (MgetStateLayer varName (car state))]
+      [(contains? varName (stateVars state))                          (MgetStateLayerProtected varName (car state))]
       [else                                                       (MgetStateProtected varName (cdr state))])))
+
+(define MgetStateLayerProtected
+  (lambda (varName layer)
+    (cond
+      [(or (null? (vals layer)) (null? (vars layer)))                              '$null$]
+      [(and (eq? varName (car (vars layer))) (eq? '$null$ (car (vals layer))))   '$null$]
+      [(eq? varName (car (vars layer)))                                                                                   (unbox (car (vals layer)))]
+      [(not (eq? varName (car (vars layer))))                                 (MgetStateLayerProtected varName (list (cdr (vars layer)) (cdr (vals layer))))]
+      [else                                                                        '$null$])))
 
 
 ; Gets the value of a variable
@@ -590,8 +599,9 @@
      [(boolexp? expr state)                                   (Mbool expr state throw ctime-type)]
      [(intexp? expr state)                                 (Minteger expr state throw ctime-type)]
      [(and (list? expr) (eq? 'funcall (operator expr)))    (MfuncVal expr state throw ctime-type)]
-     [(and (list? expr) (eq? 'new (operator expr)))        (objectClosure expr state ctime-type)]
-     [(list? expr)                                                                expr]
+     [(and (list? expr) (eq? 'new (operator expr)))         (objectClosure expr state ctime-type)]
+     [(and (list? expr) (eq? 'dot (operator expr)))    (evalDotExpression expr state throw ctime-type #f)]
+     [(list? expr)                                                                           expr]
      [else                                                      (MgetState expr state)])))
   
 
@@ -881,7 +891,7 @@
   (lambda (expr object state throw ctime-type function)
      (cond
       ((eq? function #t) object)
-      (else (Mval expr (cons (cons (getObjVars (MgetStateLayer (getClass object) state))
+      (else (Mval expr (cons (cons (getObjVars (MgetState (getClass object) state))
                        (cons (getObjVals object) '()))'()) throw ctime-type)))))
 
 (define findThis
@@ -918,7 +928,7 @@
 ; handles modifying the state for function calls being defined by the parser.
 (define MfuncState  
   (lambda (expr state return break continue throw ctime-type)
-    (MfuncExecute expr state (lambda (v) state) (lambda (s) ('error "break-out-of-loop")) (lambda (s) (continue s)) throw ctime-type)))
+    (MfuncExecute expr state (lambda (v) state) (lambda (s) (continue s)) throw ctime-type)))
 
 (define MfuncExecute
   (lambda (expr state return continue throw ctime-type)
@@ -1028,7 +1038,7 @@
 ; (run-tests 20)
 
 
-(interpret "tests4/test1.txt" 'A)
+(interpret "tests4/test4.txt" 'A)
 
 
 
