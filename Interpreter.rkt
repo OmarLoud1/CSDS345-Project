@@ -465,10 +465,43 @@
       [else (findVar val state)])))
 
 (define findCond
-  (lambda (val state pastState parent)
+  (lambda (val state parent)
       (cond
-        ((eq? 'err (returnVarIfValid val pastState)) (indexSearch val state pastState parent))
+        ((eq? 'err (returnVarIfValid val pastState)) (searchByIndex val state parent))
         (else (findFunc val pastState)))))
+
+(define searchByIndex
+  (lambda (val state ctime-type))
+  (cond
+      ((not (member?* 'this state)) (find val state))
+      (else (indexSearch (getIndex var (getObjVars ctime-type) #f)
+                               (reverse (getObjVals (find 'this environment))))))))
+
+
+;;; (define lookup-cond
+;;;   (lambda (var environment compile-type)
+;;;     (cond
+;;;       ((eq? 'error (lookup-variable-err var environment))
+;;;        (lookup-index var environment compile-type))
+;;;       (else (lookup-variable var environment)))))
+
+;;; ; Uses the reverse-indexing that Connamacher talked about in lecture
+;;; (define lookup-index
+;;;   (lambda (var environment compile-type)
+;;;     (cond
+;;;       ((not (member?* 'this environment)) (lookup var environment))
+;;;       (else (lookup-with-index (get-index var (get-instance-vars compile-type) #f)
+;;;                                (reverse (get-instance-vals (lookup 'this environment))))))))
+
+
+(define getIndex
+  (lambda (val list inlist)
+    (cond
+      ((null? list) 0)
+      ((eq? inlist #t) (+ 1 (getIndex val (cdr list) inlist)))
+      ((eq? (operator list) val) (+ 0 (getIndex val (cdr list) #t)))
+      (else (+ 0 (getIndex val (cdr list) inlist))))))
+
 
 (define findFuncCond
   (lambda (val state pastState parent)
