@@ -261,6 +261,11 @@
       ((list? (operand expr)) (caadr expr))
       (else (operand expr)))))
 
+(define makeDotExp
+  (lambda (expr)
+      (((list? expr) expr)
+      (else (cons 'dot (cons 'this (cons expr '())))))))
+
 (define dotAssignStmt
   (lambda (expr)
      (car (cddadr expr))))
@@ -347,6 +352,14 @@
 (define addFrame
   (lambda (state)
       (cons (newframe) state)))
+      
+(define returnNotExist
+  (lambda (expr)
+    (cond
+      ((null? expr) #t)
+      ((list? (car expr)) (and (returnNotExist (car expr)) (returnNotExist (cdr expr))))
+      ((eq? 'return (car expr)) #f)
+      (else (returnNotExist (cdr expr))))))
 
       
 ;;;; ***************************************************
@@ -359,11 +372,11 @@
 (define Mstate
   (lambda (expr state return break continue throw ctime-type)
     (cond
-      [(null? expr)                                                                                                           state]
-      [(intexp? expr state)                                                                             (Minteger expr state throw)]
-      [(boolexp? expr state)                                                                               (Mbool expr state throw)]
-      [(eq? (operator expr) 'function)                                    (MfuncDef expr state return break continue throw ctime-type)]
-      [(eq? (operator expr) 'funcall)                                          (MfuncState expr state return break continue throw ctime-type)]
+      [(null? expr)                                                                                                                      state]
+      [(intexp? expr state)                                                                                        (Minteger expr state throw)]
+      [(boolexp? expr state)                                                                                          (Mbool expr state throw)]
+      [(eq? (operator expr) 'function)                                            (MfuncDef expr state return break continue throw ctime-type)]
+      [(eq? (operator expr) 'funcall)                                           (MfuncState expr state return break continue throw ctime-type)]
       [(eq? (operator expr) 'return)                                     (Mreturn (operand expr) state return break continue throw ctime-type)]
       [(eq? (operator expr) 'var)                                     (Mdeclare (leftoperand expr) (rightoperand expr) state throw ctime-type)]
       [(eq? (operator expr) '=)                           (Mupdate (leftoperand expr) (Mval (rightoperand expr) state throw) state ctime-type)]
@@ -430,7 +443,38 @@
       [(and (eq? varName (car (vars layer))) (eq? '$null$ (car (vals layer))))   (error 'gStateError "This variable has not been assigned a value.")]
       [(eq? varName (car (vars layer)))                                                                                   (unbox (car (vals layer)))]
       [(not (eq? varName (car (vars layer))))                                 (MgetStateLayer varName (list (cdr (vars layer)) (cdr (vals layer))))]
-      [else                                                                        (error 'gStateError "There was a problem finding that variable.")])))  
+      [else                                                                        (error 'gStateError "There was a problem finding that variable.")]))) 
+
+(define MfindVar
+  (lambda (val state)
+    (let ((rVal (MsearchState val state)))
+      (cond
+        [(eq? (unbox value)'$null$)   (error 'gStateError "There was a problem finding a var")]
+        [else (unbox rVal)]))))
+
+(define MsearchState
+  (lambda (val state)
+    (cond 
+    [(null? state)              (error "This var was not defined")]
+    [(inList? val (car state))      (MsearchFrame val (car state))]
+    [else                           (MsearchState val (cdr state))])))
+
+(define MsearchFrame
+  (lambda (val frame)
+    (cond
+      [(not (inList? val (car frame)))  (error "Could not find variable in frame.")]
+      [(else                                            (MgetStateLayer val frame))])))
+
+(define
+  )
+
+(define inList?
+  (lambda (val list)
+    (cond
+      [(null? list)                                #f]
+      [(eq? val (car list))                        #t]
+      [else                  (inList? var (cdr list))])))
+  
 
 
 ; declares a variable
@@ -466,7 +510,7 @@
   (lambda (condition expr exprelse state return break continue throw ctime-type)
     (cond
       [(eq? (Mbool condition state throw) #t)     (Mstate expr state return break continue throw ctime-type)]
-      [(not(null? exprelse))                  (Mstate exprelse state return break continue throw ctime-type)]
+      [(not(null? exprelse))                      (Mstate exprelse state return break continue throw ctime-type)]
       [else                                                                                 state])))
 
 
@@ -730,17 +774,16 @@
 (define evalLeftDot
   (lambda (object state throw ctime-type)
      (cond
-      ((eq? object 'this) (MgetStateLayer 'this state))
+      ((eq? object 'this)  (MgetStateLayer 'this state))
       ((eq? object 'super) (objectClosure (superObj ctime-type) state ctime-type))
-      ((and (list? object) (eq? (operator object) 'funcall))
-       (MfuncExecute object state throw ctime-type)) ;; need to fix the execute for this to even try to run
-      ((list? object) (objectClosure object state ctime-type))
-      (else (lookup-cond instance environment compile-type))))) ;; need to implement cond
+      ((and (list? object) (eq? (operator object) 'funcall)) (MfuncExecuteNoBreak object state throw ctime-type)) 
+      ((list? object)      (objectClosure object state ctime-type))
+      (else                (lookup-cond expr state ctime-type))))) ;; need to implement cond
 
 (define evalRightDot
   (lambda (expr object state throw ctime-type function)
      (cond
-      ((eq? funcall #t) object)
+      ((eq? function #t) object)
       (else (Mval expr (cons (cons (getObjVars (MgetStateLayer (getClass object) state))
                        (cons (getObjVals object) '()))'()) throw ctime-type)))))
 
@@ -772,20 +815,47 @@
     (MfuncExecute expr state (lambda (v) state) (lambda (s) ('error "break-out-of-loop")) (lambda (s) (continue s)) throw ctime-type)))
     
 ; this will execute a given function call defined in expr
-; MODIFICATION FOR THIS CLASS TO ADD COMPILE TYPE REQUIRES STEP 5 OF PART 2
+(define MfuncExecuteNoBreak
+  (lambda (expr state return throw ctime-type)
+    (let* ((closure (MgetState (operand expr) state))
+           (inner ((body closure) state))
+           (middle (addFrame inner))
+           (outer (assignParams (vars closure) (funcargs expr) middle state throw))
+           (dotExp (makeDotExp (getDot expr)))
+           (compileType (MgetStateLayer (getClass (evalDotExpression dotExp state throw ctime-type #t))))        
+           (modCompileType (MgetStateLayer (getStmtList closure) state)))
+           
+    
+     (if (not (eq? (- (length (vars closure)) 1) (length (funcallParams expr))))
+        ('error "Error: Wrong Number of Parameters")
+        (MstateList (getClosureBody closure) outer return 
+                                            (lambda (v) (error "break"))
+                                            (lambda (v) (error "there was no return statement")) 
+                                            throw modCompileType)))))
+
+
 (define MfuncExecute
   (lambda (expr state return break continue throw ctime-type)
     (let* ((closure (MgetState (operand expr) state))
            (inner ((body closure) state))
            (middle (addFrame inner))
-           (outer
-            (assignParams (vars closure)
-                               (funcargs expr)
-                               middle state throw))
-            (modCompileType (MgetStateLayer (getStmtList closure) state)))
-    (if (not (eq? (length (vars closure)) (length (funcallParams expr))))
-        ('error "Error: Wrong Number of Parameters")
-        (MstateList (getClosureBody closure) outer return break continue throw)))))
+           (outer (assignParams (vars closure) (funcargs expr) middle state throw))
+           (dotExp (makeDotExp (getDot expr)))
+           (compileType (MgetStateLayer (getClass (evalDotExpression dotExp state throw ctime-type #t))))        
+           (modCompileType (MgetStateLayer (getStmtList closure) state)))
+           
+    
+     (cond
+      ((not (eq? (- (length (vars closure)) 1) (length (funcallParams expr))))  ('error "Error: Wrong Number of Parameters"))
+      ((and (eq? (returnNotExist (getClosureBody closure)) #t) (not (null? (MstateList (getClosureBody closure) outer
+                                (lambda (v) state)
+                                (lambda (v) ('error "break-out-of-loop"))
+                                (lambda (v) (continue v))
+                                throw ctime-type)))) state)       
+      (else (MstateList (getClosureBody closure) outer return 
+                                            (lambda (v) (error "break"))
+                                            (lambda (v) (error "there was no return statement")) 
+                                            throw modCompileType))))))
 
 ; If there are parameters defined in the params list, a new unction will be declared
 (define assignParams
