@@ -378,7 +378,7 @@
       [(boolexp? expr state)                                                                                          (Mbool expr state throw)]
       [(eq? (operator expr) 'function)                                                                  (MfuncDef expr state throw ctime-type)]
       [(eq? (operator expr) 'funcall)                                           (MfuncState expr state return break continue throw ctime-type)]
-      [(eq? (operator expr) 'return)                                     (Mreturn (operand expr) state return break continue throw ctime-type)]
+      [(eq? (operator expr) 'return)                                     (return (operand expr) state return break continue throw ctime-type)]
       [(eq? (operator expr) 'var)                                     (Mdeclare (leftoperand expr) (rightoperand expr) state throw ctime-type)]
       [(eq? (operator expr) '=)                           (Mupdate (leftoperand expr) (Mval (rightoperand expr) state throw ctime-type) state)]
       [(eq? (operator expr) 'if)      (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw ctime-type)]
@@ -446,60 +446,67 @@
       [(not (eq? varName (car (vars layer))))                                 (MgetStateLayer varName (list (cdr (vars layer)) (cdr (vals layer))))]
       [else                                                                        (error 'gStateError "There was a problem finding that variable.")]))) 
 
-(define Mfind
+(define find
   (lambda (val state)
-    (MfindVar val state)))
+    (findVar val state)))
 
-(define MfindVar
+(define findVar
   (lambda (val state)
-    (let ((rVal (MsearchState val state)))
+    (let ((rVal (searchState val state)))
       (cond
         [(eq? (unbox val)'$null$)   (error 'gStateError "There was a problem finding a var")]
         [else (unbox rVal)]))))
 
-(define MfindFunc
-  (lambda (val state parent initState)
+(define findFunc
+  (lambda (val state parent pastState)
     (cond
-      [(null? parent)  (MfindVar val state)]
-      [(eq? 'err (MreturnVarIfValid val state)) (MfindFunc val (getUpdatedState parent initState) (retrieveParent (Mfind parent initState)) initState)]
-      [else (MfindVar val state)])))
+      [(null? parent)  (findVar val state)]
+      [(eq? 'err (returnVarIfValid val state)) (findFunc val (getUpdatedState parent pastState) (retrieveParent (find parent pastState)) pastState)]
+      [else (findVar val state)])))
 
-(define MsearchState
+
+(define findFuncCond
+  (lambda (val state pastState parent)
+      (cond
+        ((eq? 'err (returnVarIfValid val pastState)) (findFunc val state pastState parent))
+        (else (findFunc val pastState)))))
+
+(define searchState
   (lambda (val state)
     (cond 
     [(null? state)              (error "This var was not defined")]
-    [(inList? val (car state))      (MsearchFrame val (car state))]
-    [else                           (MsearchState val (cdr state))])))
+    [(inList? val (car state))      (searchFrame val (car state))]
+    [else                           (searchState val (cdr state))])))
 
-(define MsearchFrame
+(define searchFrame
   (lambda (val frame)
     (cond
       [(not (inList? val (car frame)))  (error "Could not find variable in frame.")]
       [else                                            (MgetStateLayer val frame)])))
 
-(define MindexSearch
+(define indexSearch
   (lambda (var state ctime-type)
     (cond
-      [(not (member?* 'this state))                                                                      (MfindVar var state)]
+      [(not (member?* 'this state))                                                                      (findVar var state)]
       [(eq? (hasIndex var (caadr ctime-type)) 0)                                                       (unbox (operator list))]
-      [else                                       (MindexSearch (- (hasIndex var (caadr ctime-type)) 1) (cdr (getList state)))])))
+      [else                                       (indexSearch (- (hasIndex var (caadr ctime-type)) 1) (cdr (getList state)))])))
 
-(define MreturnVarIfValid
+(define returnVarIfValid
   (lambda (val state)
-    (let ((rVal (MreturnStateIfValid val state)))
+    (let ((rVal (returnStateIfValid val state)))
       (cond
         [(eq? 'error rVal)                   'err]
         [(eq? '$null$ (unbox rVal))          'err]
         [else                        (unbox rVal)]))))
 
-(define MreturnStateIfValid
+(define returnStateIfValid
   (lambda (val state)
     (cond
       [(null? state)  'err]
-      [(inList? val (getElements (headFrame list)))     (MreturnFrameIfValid val (headFrame state))]
-      [else                                           (MreturnStateIfValid val (getElements state))])))
+      [(inList? val (getElements (headFrame list)))     (returnFrameIfValid val (headFrame state))]
+      [else                                           (returnStateIfValid val (getElements state))])))
 
-(define MreturnFrameIfValid
+(define returnFrameIfValid
   (lambda (val frame)
     (cond
       [(not (inList? val (getElements frame)))                 'err]
@@ -513,8 +520,8 @@
       [else                  (inList? val (getElements list))])))
 
 (define getUpdatedState
-  (lambda(parent initState)
-    (cons (retrieveClassFuncs (Mfind parent initState)) '())))
+  (lambda(parent pastState)
+    (cons (retrieveClassFuncs (find parent pastState)) '())))
 
 (define getElements cdr)
 (define retrieveParent car)
@@ -529,7 +536,7 @@
   
 (define getList
   (lambda (state)
-    (reverse (caadr (MfindVar 'this state)))))
+    (reverse (caadr (findVar 'this state)))))
 
 
 ; declares a variable
@@ -616,7 +623,7 @@
 
 
 ;returns the value of the expression given
-(define Mreturn
+(define return
   (lambda (expr state return break continue throw ctime-type)
     (cond
       [(eq? (Mval expr state throw ctime-type) #t)                  (return "true")]
@@ -879,7 +886,7 @@
   (lambda (expr state return continue throw ctime-type)
     (let* ((dotExpr (makeDotExp (getDot expr)))
            (compileType (MgetState (getClass (evalDotExpression dotExpr state throw ctime-type #t))))    
-           (closure (MfindFunc (body dotExpr) (cons (body compileType) '()) state (firstExpr ctime-type)))
+           (closure (findFunc (body dotExpr) (cons (body compileType) '()) state (firstExpr ctime-type)))
            (inner ((body closure) state))
            (middle (addFrame inner))
            (outer (assignParams (vars closure) (funcargs expr) middle state throw))    
