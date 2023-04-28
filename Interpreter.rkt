@@ -467,32 +467,15 @@
 (define findCond
   (lambda (val state parent)
       (cond
-        ((eq? 'err (returnVarIfValid val pastState)) (searchByIndex val state parent))
-        (else (findFunc val pastState)))))
+        ((eq? 'err (returnVarIfValid val state)) (searchByIndex val state parent))
+        (else (findFunc val state)))))
 
 (define searchByIndex
-  (lambda (val state ctime-type))
+  (lambda (val state ctime-type)
   (cond
       ((not (member?* 'this state)) (find val state))
-      (else (indexSearch (getIndex var (getObjVars ctime-type) #f)
-                               (reverse (getObjVals (find 'this environment))))))))
-
-
-;;; (define lookup-cond
-;;;   (lambda (var environment compile-type)
-;;;     (cond
-;;;       ((eq? 'error (lookup-variable-err var environment))
-;;;        (lookup-index var environment compile-type))
-;;;       (else (lookup-variable var environment)))))
-
-;;; ; Uses the reverse-indexing that Connamacher talked about in lecture
-;;; (define lookup-index
-;;;   (lambda (var environment compile-type)
-;;;     (cond
-;;;       ((not (member?* 'this environment)) (lookup var environment))
-;;;       (else (lookup-with-index (get-index var (get-instance-vars compile-type) #f)
-;;;                                (reverse (get-instance-vals (lookup 'this environment))))))))
-
+      (else (indexSearch (getIndex val (getObjVars ctime-type) #f)
+                               (reverse (getObjVals (find 'this state))))))))
 
 (define getIndex
   (lambda (val list inlist)
@@ -884,7 +867,7 @@
       ((eq? object 'super) (objectClosure (superObj ctime-type) state ctime-type))
       ((and (list? object) (eq? (operator object) 'funcall)) (MfuncExecute object state (lambda (s) ('error "no-return-statement")) throw ctime-type)) 
       ((list? object)      (objectClosure object state ctime-type))
-      (else                (findFuncCond object state ctime-type))))) ;; need to implement cond
+      (else                (findCond object state ctime-type)))))
 
 (define evalRightDot
   (lambda (expr object state throw ctime-type function)
