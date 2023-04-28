@@ -576,19 +576,19 @@
 
 
 ;handles the main function
-(define Mmain
+(define findMain
   (lambda (expr-list state return break continue throw class)
     (cond
-      [(null? expr-list)                           (error "There was a problem handling a function.")]
-      [(eq? (findMain expr-list state return break continue throw class) class)  (findMain expr-list state return break continue throw class)]
-      [else                                (Mmain (args expr-list) state return break continue throw)])))
+      [(null? expr-list)                            (error "There was a problem handling a function.")]
+      [(eq? (get-class expr-list) class)  (Mmain expr-list state return break continue throw class)]
+      [else                           (findMain (args expr-list) state return break continue throw class)])))
 
-(define findMain
+(define Mmain
   (lambda (expr-list state return break continue throw class)
   (cond
     [(and (eq? (operator (firstExpr expr-list)) 'function) (eq? (leftoperand (firstExpr expr-list)) `main))
-      (MstateList (mainBody expr-list) (addFrame state) return break continue throw                           (MgetStateLayer class state))]
-    [else                                                                                                     (findMain (cdr expr-list) state return break continue throw class)]
+      (MstateList (mainBody expr-list) (addFrame state) return break continue throw (MgetStateLayer class state))]
+    [else                                                                                                     (Mmain (cdr expr-list) state return break continue throw class)]
     )))
 
 (define get-class
@@ -706,7 +706,7 @@
 (define Mexprlist-global
   (lambda (expr-list state return break continue throw init-expr-list class)
     (if (null? expr-list)
-        (Mmain init-expr-list state return break continue throw class)
+        (findMain init-expr-list state return break continue throw class)
         (Mexprlist-global (nextLines expr-list)
                           (Mexpr-global (operator expr-list) state return break continue throw init-expr-list class)
                           return break continue throw init-expr-list class))))
@@ -770,7 +770,7 @@
 ; (run-tests 20)
 
 
-(interpret "testI.txt" "A")
+(interpret "testI.txt" 'A)
 
 
 
