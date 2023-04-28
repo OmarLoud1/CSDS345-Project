@@ -16,3 +16,6 @@ compiled/drracket/errortrace/functionParser_rkt.dep
 compiled/drracket/errortrace/functionParser_rkt.zo
 part3.rkt
 
+compiled/drracket/errortrace/classParser_rkt.dep
+compiled/drracket/errortrace/classParser_rkt.zo
+compiled/drracket/errortrace/functionParser_rkt.dep
