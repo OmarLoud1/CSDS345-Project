@@ -465,8 +465,14 @@
       [(not (inList? val (car frame)))  (error "Could not find variable in frame.")]
       [(else                                            (MgetStateLayer val frame))])))
 
-(define
-  )
+(define MindexSearch
+  (lambda (val state ctime-type)
+    (cond
+      [(not (memeber?* 'this state))                                                                      (MfindVar val state)]
+      [(eq? (hasIndex var (caadr ctime-type)) 0)                                                       (unbox (operator list))]
+      [else                                       (MindexSearch (- (hasIndex var (caadr ctime-type)) 1) (cdr (getList state)))])))
+
+(define )
 
 (define inList?
   (lambda (val list)
@@ -474,7 +480,16 @@
       [(null? list)                                #f]
       [(eq? val (car list))                        #t]
       [else                  (inList? var (cdr list))])))
+
+(define hasIndex
+  (lambda (val list)
+  (cond 
+    [(eq? var (car list))                                0]
+    [else                  (+ 1 (hasIndex val (cdr list)))])))
   
+(define getList
+  (labda (state)
+    (reverse (caadr (MfindVar 'this state)))))
 
 
 ; declares a variable
@@ -699,8 +714,7 @@
   (cond
     [(and (eq? (operator (firstExpr expr-list)) 'function) (eq? (leftoperand (firstExpr expr-list)) `main))
       (MstateList (mainBody expr-list) (addFrame state) return break continue throw (MgetStateLayer class state))]
-    [else (findMain (cdr expr-list) state return break continue throw class)]
-    )))
+    [else (findMain (cdr expr-list) state return break continue throw class)])))
 
 ; This handles expressions that define functions
 (define MfuncDef
