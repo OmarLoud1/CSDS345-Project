@@ -452,10 +452,10 @@
 
 (define findVar
   (lambda (val state)
-    (let ((rVal (searchState val state)))
+    (let ((rVal (MgetState val state))) ; warning: i fucked with this
       (cond
-        [(eq? (unbox val)'$null$)   (error 'gStateError "There was a problem finding a var")]
-        [else (unbox rVal)]))))
+        [(eq? val '$null$)   (error 'gStateError "There was a problem finding a var")]
+        [else rVal]))))
 
 (define findFunc
   (lambda (val state parent pastState)
@@ -496,14 +496,14 @@
   (lambda (val state)
     (cond 
     [(null? state)              (error "This var was not defined")]
-    [(inList? val (car state))      (searchFrame val (car state))]
+    [(member? val (vars (firstExpr state)))      (searchFrame val (car state))]
     [else                           (searchState val (cdr state))])))
 
 (define searchFrame
   (lambda (val frame)
     (cond
-      [(not (inList? val (car frame)))  (error "Could not find variable in frame.")]
-      [else                                            (MgetStateLayer val frame)])))
+      [(not (member? val (vars frame)))  (error "Could not find variable in frame.")]
+      [else                                            (MgetState val frame)])))
 
 (define indexSearch
   (lambda (var state ctime-type)
@@ -516,7 +516,7 @@
   (lambda (val state)
     (let ((rVal (returnStateIfValid val state)))
       (cond
-        [(eq? 'error rVal)                   'err]
+        [(eq? 'err rVal)                   'err]
         [(eq? '$null$ (unbox rVal))          'err]
         [else                        (unbox rVal)]))))
 
@@ -524,7 +524,7 @@
   (lambda (val state)
     (cond
       [(null? state)  'err]
-      [(inList? val (getElements (headFrame list)))     (returnFrameIfValid val (headFrame state))]
+      [(inList? val (getElements (headFrame state)))     (returnFrameIfValid val (headFrame state))]
       [else                                           (returnStateIfValid val (getElements state))])))
 
 (define returnFrameIfValid
@@ -906,7 +906,7 @@
 (define MfuncExecute
   (lambda (expr state return continue throw ctime-type)
     (let* ((dotExpr (makeDotExp (getDot expr)))
-           (compileType (MgetState (getClass (evalDotExpression dotExpr state throw ctime-type #t))))    
+           (compileType (MgetState (getClass (evalDotExpression dotExpr state throw ctime-type #t)) state))    
            (closure (findFunc (body dotExpr) (cons (body compileType) '()) state (firstExpr ctime-type)))
            (inner ((body closure) state))
            (middle (addFrame inner))
