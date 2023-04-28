@@ -1,8 +1,8 @@
 ;;;; ***************************************************
 ;;;; Group 6: Omar Loudghiri(oxl51), Kyler Rosen(kkr33), Niels Sogaard(nks69)
 ;;;; CSDS 345 Spring 2023
-;;;; Project Part 3
-;;;; 04/14/2023
+;;;; Project Part 4
+;;;; 04/27/2023
 ;;;; ***************************************************
 
 
@@ -10,7 +10,7 @@
 #lang racket
 
 (require rackunit)
-(require "functionParser.rkt")
+(require "classParser.rkt")
 
 ;;;; ***************************************************
 
@@ -201,7 +201,7 @@
     (cond
       ((null? parent) vars)
       (else (cons (append (car vars) (caadr (MgetStateLayer parent state)))
-                  (cons (append (cadr field) (cadadr (MgetStateLayer parent state))) '()))))))
+                  (cons (append (cadr vars) (cadadr (MgetStateLayer parent state))) '()))))))
 
 
 (define validOperand
@@ -580,7 +580,7 @@
   (lambda (expr-list state return break continue throw class)
     (cond
       [(null? expr-list)                           (error "There was a problem handling a function.")]
-      [(eq? (findMain expr-list) class)  (findMain expr-list state return break continue throw class)]
+      [(eq? (findMain expr-list state return break continue throw class) class)  (findMain expr-list state return break continue throw class)]
       [else                                (Mmain (args expr-list) state return break continue throw)])))
 
 (define findMain
@@ -606,17 +606,17 @@
     (list (cons 'this (operandn 2 expr)) (operandn 3 expr) (lambda (env) (functionState expr (outerLayerVars env) env)) class)))
 
 (define classClosure
-  (lambda (expr state)
+  (lambda (expr state throw)
     (list (superClass expr)
      (populateVars (getClosure (evalDefinitionList (getStmtList expr) (newstate))) (superClass expr) state)
-     (getClosure (evalMethodList (getStmtList expr) (newstate) (className expr))))))
+     (getClosure (evalMethodList (getStmtList expr) (newstate) (className expr) throw)))))
 
 
 (define evalDefinitionList
-  (lambda (exprs state))
+  (lambda (exprs state)
    (if (null? exprs)
       state
-      (evalDefintionList (modifiers exprs) (evalDefinition (operator exprs state)))))
+      (evalDefinitionList (modifiers exprs) (evalDefinition (operator exprs) state)))))
 
 (define evalDefinition
   (lambda (expr state)
@@ -632,23 +632,22 @@
 
 
 (define evalMethodList
- (lambda (stmts state class))
+ (lambda (stmts state class throw)
    (if (null? stmts)
       state
-      (evalMethodList (modifiers stmts) (evalMethod (operator stmts state)) class)))
-
+      (evalMethodList (modifiers stmts) (evalMethod (operator stmts) state class throw) class throw))))
 
 (define evalMethod
-  (lambda (expr state class)
+  (lambda (expr state class throw)
     (cond
-      ((or (eq? 'function (operator expr)) (eq? 'static-function (operator expr))) (declareFunction expr state class))
-      (else environment))))
+      ((or (eq? 'function (operator expr)) (eq? 'static-function (operator expr))) (declareFunction expr state class throw))
+      (else state))))
 
 (define declareFunction
-  (lambda (expr state class)
-    (insert (operand expr)
+  (lambda (expr state class throw)
+    (Mdeclare (operand expr)
             (functionClosure expr state class)
-            environment)))
+            state throw)))
 
 ; matches the outer variables to the ones within the function
 (define functionState
@@ -709,16 +708,17 @@
     (if (null? expr-list)
         (Mmain init-expr-list state return break continue throw class)
         (Mexprlist-global (nextLines expr-list)
-                          (Mexpr-global (operator expr-list) state return break continue throw init-expr-list)
+                          (Mexpr-global (operator expr-list) state return break continue throw init-expr-list class)
                           return break continue throw init-expr-list class))))
 
 ;handles expressions for global variables outside of functions
 (define Mexpr-global
   (lambda (expr state return break continue throw init-expr-list class)
     (cond
-      [(eq? 'function (operator expr))                  (MfuncDef expr state return break continue throw)]
+      [(eq? 'function (operator expr))                          (MfuncDef expr state return break continue throw)]
       [(eq? '= (operator expr))                      (Massign (leftoperand expr) (rightoperand expr) state throw)]
       [(eq? 'var (operator expr))                   (Mdeclare (leftoperand expr) (rightoperand expr) state throw)]
+      [(eq? 'class (operator expr))                                               (classClosure expr state throw)]
       [else                                                          ('error "Unknown Statement outside of Main")])))
 
 
@@ -754,7 +754,6 @@
 
 ;;;; ***************************************************
 ;;;; ***************************************************
-(displayln "Disclaimer: Test 4 takes a long time, but it will return a value")
 (define run-tests
   (lambda (i)
     (cond
@@ -768,10 +767,10 @@
                                  [expected-output (with-input-from-file (format "tests3/test~a-output.txt" i) read)])
                              (check-equal? (interpret (parser test-file)) expected-output)))])))
 
-(run-tests 20)
+; (run-tests 20)
 
 
-; (interpret (parser "tests3/test20.txt"))
+(interpret "testI.txt" "A")
 
 
 
