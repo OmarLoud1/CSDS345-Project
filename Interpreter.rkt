@@ -223,7 +223,7 @@
                                         state
                                         (lambda (v state1) (error "exception thrown"))
                                         ctime-type))
-                  (allInstances (modifiers expr) state))))))
+                  (allInstances (modifiers expr) state ctime-type))))))
 
 
 (define validOperand
@@ -435,6 +435,13 @@
       [(contains? varName (stateVars state))                          (MgetStateLayer varName (car state))]
       [else                                                                 (MgetState varName (cdr state))])))
 
+(define MgetStateProtected
+  (lambda (varName state)
+    (cond
+      [(null? state)                                                                               '$null$] ; warning, this is a hella hack
+      [(contains? varName (stateVars state))                          (MgetStateLayer varName (car state))]
+      [else                                                       (MgetStateProtected varName (cdr state))])))
+
 
 ; Gets the value of a variable
 (define MgetStateLayer
@@ -458,7 +465,7 @@
         [else rVal]))))
 
 (define findFunc
-  (lambda (val state parent pastState)
+  (lambda (val state pastState parent)
     (cond
       [(null? parent)  (findVar val state)]
       [(eq? 'err (returnVarIfValid val state)) (findFunc val (getUpdatedState parent pastState) (retrieveParent (find parent pastState)) pastState)]
@@ -489,8 +496,8 @@
 (define findFuncCond
   (lambda (val state pastState parent)
       (cond
-        ((eq? 'err (returnVarIfValid val pastState)) (findFunc val state pastState parent))
-        (else (findFunc val pastState)))))
+        ((eq? '$null$ (MgetStateProtected val pastState)) (findFunc val state pastState parent))
+        (else (findVar val pastState)))))
 
 (define searchState
   (lambda (val state)
@@ -826,13 +833,13 @@
 (define evalDefinition
   (lambda (expr state)
     (cond
-      ((eq? 'var (operator expr)) (decalareDefinitions expr state))
+      ((eq? 'var (operator expr)) (declareDefinitions expr state))
       (else state))))
   
-(define decalareDefinitions
+(define declareDefinitions
   (lambda (expr state)
       (cond
-        ((validOperand expr) (Mdeclare (operand expr) (rightoperand expr) state))
+        ((validOperand expr) (StateUpdate (list (operand expr) (rightoperand expr)) state))
         (else (Mdeclare (operand expr) '$null$ state)))))
 
 
@@ -863,9 +870,10 @@
 (define evalLeftDot
   (lambda (object state throw ctime-type)
      (cond
-      ((eq? object 'this)  (MgetStateLayer 'this state))
+      ((eq? object 'this)  (MgetState 'this state))
       ((eq? object 'super) (objectClosure (superObj ctime-type) state ctime-type))
-      ((and (list? object) (eq? (operator object) 'funcall)) (MfuncExecute object state (lambda (s) ('error "no-return-statement")) throw ctime-type)) 
+      ((and (list? object) (eq? (operator object) 'funcall))
+       (MfuncVal object state throw ctime-type)) 
       ((list? object)      (objectClosure object state ctime-type))
       (else                (findCond object state ctime-type)))))
 
@@ -876,6 +884,15 @@
       (else (Mval expr (cons (cons (getObjVars (MgetStateLayer (getClass object) state))
                        (cons (getObjVals object) '()))'()) throw ctime-type)))))
 
+(define findThis
+  (lambda (object state throw ctime-type)
+     (cond
+      ((eq? object 'this)  (MgetState 'this state))
+      ((eq? object 'super) (MgetState 'this state))
+      ((and (list? object) (eq? (operator object) 'funcall))
+       (MfuncVal object state throw ctime-type)) 
+      ((list? object)      (objectClosure object state ctime-type))
+      (else                (findCond object state ctime-type)))))
 
 (define objectClosure 
   (lambda (expr state ctime-type)
@@ -907,10 +924,10 @@
   (lambda (expr state return continue throw ctime-type)
     (let* ((dotExpr (makeDotExp (getDot expr)))
            (compileType (MgetState (getClass (evalDotExpression dotExpr state throw ctime-type #t)) state))    
-           (closure (findFunc (body dotExpr) (cons (body compileType) '()) state (firstExpr ctime-type)))
+           (closure (findFuncCond (body dotExpr) (cons (body compileType) '()) state (firstExpr ctime-type)))
            (inner ((body closure) state))
            (middle (addFrame inner))
-           (outer (assignParams (vars closure) (funcargs expr) middle state throw))    
+           (outer (assignParams (vars closure) (cons (findThis (getLeftDot dotExpr) state throw ctime-type) (funcargs expr)) middle state throw ctime-type))    
            (modCompileType (MgetState (getStmtList closure) state)))
            
     
@@ -926,14 +943,17 @@
                                             (lambda (v) (error "there was no return statement")) 
                                             throw modCompileType))))))
 
-; If there are parameters defined in the params list, a new unction will be declared
+; If there are parameters defined in the params list, a new function will be declared
 (define assignParams
   (lambda (params arguments frame state throw ctime-type)
-    (if (null? params)
-        frame
-        (assignParams (args params) (args arguments)
-                         (Mdeclare (firstExpr params) (Mval (firstExpr arguments) state throw ctime-type) frame throw)
-                         state throw))))
+    (cond
+      [(null? params)   frame]
+      [(eq? (vars params) 'this)    (assignParams (args params) (args arguments)
+                                                 (StateUpdate (list (firstExpr params) (firstExpr arguments)) frame)
+                                                 state throw ctime-type)]
+        [else                      (assignParams (args params) (args arguments)
+                                                 (StateUpdate (list (firstExpr params) (Mval (firstExpr arguments) state throw ctime-type)) frame)
+                                                 state throw ctime-type)])))
       
 ; iterates across statement list executing expressions
 (define MstateList
@@ -1008,7 +1028,7 @@
 ; (run-tests 20)
 
 
-(interpret "tests4/testIII.txt" 'A)
+(interpret "tests4/test1.txt" 'A)
 
 
 
