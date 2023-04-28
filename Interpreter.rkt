@@ -223,7 +223,7 @@
                                         state
                                         (lambda (v state1) (error "exception thrown"))
                                         ctime-type))
-                  (allInstances (modifiers expr) state ctime-type))))))
+                  (allInstances (modifiers expr) state))))))
 
 
 (define validOperand
@@ -376,11 +376,11 @@
       [(null? expr)                                                                                                                      state]
       [(intexp? expr state)                                                                                        (Minteger expr state throw)]
       [(boolexp? expr state)                                                                                          (Mbool expr state throw)]
-      [(eq? (operator expr) 'function)                                            (MfuncDef expr state return break continue throw ctime-type)]
+      [(eq? (operator expr) 'function)                                                                  (MfuncDef expr state throw ctime-type)]
       [(eq? (operator expr) 'funcall)                                           (MfuncState expr state return break continue throw ctime-type)]
       [(eq? (operator expr) 'return)                                     (Mreturn (operand expr) state return break continue throw ctime-type)]
       [(eq? (operator expr) 'var)                                     (Mdeclare (leftoperand expr) (rightoperand expr) state throw ctime-type)]
-      [(eq? (operator expr) '=)                           (Mupdate (leftoperand expr) (Mval (rightoperand expr) state throw) state ctime-type)]
+      [(eq? (operator expr) '=)                           (Mupdate (leftoperand expr) (Mval (rightoperand expr) state throw ctime-type) state)]
       [(eq? (operator expr) 'if)      (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw ctime-type)]
       [(eq? (operator expr) 'while)                              (Mwhile (leftoperand expr) (rightoperand expr) state return throw ctime-type)]
       [(eq? (operator expr) 'break)                                                                            (Mbreak state break)] ; does not need to include compile type
@@ -393,38 +393,38 @@
 
 ; Finds the integer value of an expression
 (define Minteger
-  (lambda (expr state throw)
+  (lambda (expr state throw ctime-type)
     (cond
       [(number? expr)                                                                                               expr]
       [(box? expr)                                                                                          (unbox expr)]
       [(not (list? expr))                                                                         (MgetState expr state)]
-      [(and (empty? (rightoperand expr)) (eq? (operator expr) '-))          (- 0  (Mval (leftoperand expr) state throw))]
-      [(eq? (operator expr) '+) (+         (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw))]
-      [(eq? (operator expr) '-) (-         (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw))]
-      [(eq? (operator expr) '*) (*         (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw))]
-      [(eq? (operator expr) '/) (quotient  (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw))]
-      [(eq? (operator expr) '%) (remainder (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw))]
+      [(and (empty? (rightoperand expr)) (eq? (operator expr) '-))          (- 0  (Mval (leftoperand expr) state throw ctime-type))]
+      [(eq? (operator expr) '+) (+         (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
+      [(eq? (operator expr) '-) (-         (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
+      [(eq? (operator expr) '*) (*         (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
+      [(eq? (operator expr) '/) (quotient  (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
+      [(eq? (operator expr) '%) (remainder (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
       [else                                                                            (error 'unknownop "Bad Operator")]))) 
 
 
 
 ; Finds the boolean value of an expression
 (define Mbool
-  (lambda (expr state throw)
+  (lambda (expr state throw ctime-type)
     (cond
       [(boolean? expr)                                                                                                      expr]
       [(eq? 'true expr)                                                                                                       #t]
       [(eq? 'false expr)                                                                                                      #f]
       [(not (list? expr))                                                                                 (MgetState expr state)]
-      [(eq? (operator expr) '&&)              (and (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw))]
-      [(eq? (operator expr) '||)               (or (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw))]
-      [(eq? (operator expr) '!)                                                      (not (Mval (leftoperand expr) state throw))]
-      [(eq? (operator expr) '==)              (eq? (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw))]
-      [(eq? (operator expr) '!=)             (neq? (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw))]
-      [(eq? (operator expr) '<)                 (< (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw))]
-      [(eq? (operator expr) '>)                 (> (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw))]
-      [(eq? (operator expr) '<=)               (<= (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw))]
-      [(eq? (operator expr) '>=)               (>= (Mval (leftoperand expr) state throw) (Mval (rightoperand expr) state throw))]
+      [(eq? (operator expr) '&&)              (and (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
+      [(eq? (operator expr) '||)               (or (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
+      [(eq? (operator expr) '!)                                                      (not (Mval (leftoperand expr) state throw ctime-type))]
+      [(eq? (operator expr) '==)              (eq? (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
+      [(eq? (operator expr) '!=)             (neq? (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
+      [(eq? (operator expr) '<)                 (< (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
+      [(eq? (operator expr) '>)                 (> (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
+      [(eq? (operator expr) '<=)               (<= (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
+      [(eq? (operator expr) '>=)               (>= (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
       [else                                                                                    (error 'unknownop "Bad Operator")])))
 
 ; Gets the state of the variable from state
@@ -501,9 +501,9 @@
 
 ; assigns a value to a variable
 (define Massign
-  (lambda (var val state throw)
+  (lambda (var val state throw ctime-type)
     (if (declared? var state)
-      (StateUpdate (list var (Mval val state throw)) state)
+      (StateUpdate (list var (Mval val state throw ctime-type)) state)
       (error 'gStateError "The variable was not declared."))))
 
 
@@ -513,7 +513,8 @@
     (cond
      [(boolexp? expr state)                                   (Mbool expr state throw)]
      [(intexp? expr state)                                 (Minteger expr state throw)]
-     [(and (list? expr) (eq? 'funcall (operator expr)))    (MfuncVal expr state throw ctime-type)]
+     [(and (list? expr) (eq? 'funcall (operator expr)))    (MfuncVal expr state throw)]
+     [(and (list? expr) (eq? 'new (operator expr)))        (objectClosure expr state ctime-type)]
      [(list? expr)                                                                expr]
      [else                                                      (MgetState expr state)])))
   
@@ -711,8 +712,8 @@
 (define Mmain
   (lambda (expr-list state return break continue throw class)
   (cond
-    [(eq? (leftoperand (firstExpr expr-list)) `main)  (MstateList (mainBody expr-list) (addFrame state) return break continue throw)]
-    [else                                                                                        (Mmain (args expr-list) state return break continue throw class)])))
+    [(eq? (leftoperand (firstExpr expr-list)) `main)  (MstateList (mainBody expr-list) (addFrame state) return break continue throw (MgetState class state))]
+    [else                                                                                   (Mmain (args expr-list) state return break continue throw class)])))
 
 (define get-class
   (lambda (expr-list)
@@ -720,8 +721,8 @@
 
 ; This handles expressions that define functions
 (define MfuncDef
-  (lambda (expr state return break continue throw ctime-type)
-    (Mdeclare (operand expr) (functionClosure expr state) state throw (retrieveContainClass ctime-type))))
+  (lambda (expr state throw ctime-type)
+    (Mdeclare (operand expr) (functionClosure expr state (retrieveContainClass ctime-type)) state throw)))
 
 ; Will get and return the class that a given function is contained in
 (define retrieveContainClass
@@ -738,7 +739,7 @@
 
 (define Mclass
   (lambda (expr state throw)
-    (Mdeclare (operand expr) (classClosure expr state throw) state throw)))
+    (StateUpdate (list (operand expr) (classClosure expr state throw)) state)))
 
 (define classClosure
   (lambda (expr state throw)
@@ -775,14 +776,14 @@
 (define evalMethod
   (lambda (expr state class throw)
     (cond
-      ((or (eq? 'function (operator expr)) (eq? 'static-function (operator expr))) (declareFunction expr state class throw))
+      ((or (eq? 'function (operator expr)) (eq? 'static-function (operator expr))) (declareFunction expr state class))
       (else state))))
 
 (define declareFunction
-  (lambda (expr state class throw ctime-type)
-    (Mdeclare (operand expr)
-            (functionClosure expr state class)
-            state throw ctime-type)))
+  (lambda (expr state class)
+    (StateUpdate (list (operand expr)
+            (functionClosure expr state class))
+            state)))
 
 (define evalDotExpression
   (lambda (expr state throw ctime-type function)
@@ -878,11 +879,11 @@
 
 ; If there are parameters defined in the params list, a new unction will be declared
 (define assignParams
-  (lambda (params arguments frame state throw)
+  (lambda (params arguments frame state throw ctime-type)
     (if (null? params)
         frame
         (assignParams (args params) (args arguments)
-                         (Mdeclare (firstExpr params) (Mval (firstExpr arguments) state throw) frame throw)
+                         (Mdeclare (firstExpr params) (Mval (firstExpr arguments) state throw ctime-type) frame throw)
                          state throw))))
       
 ; iterates across statement list executing expressions
