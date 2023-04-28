@@ -580,7 +580,7 @@
   (lambda (expr-list state return break continue throw class)
     (cond
       [(null? expr-list)                           (error "There was a problem handling a function.")]
-      [(eq? (findMain expr-list) class)  (findMain expr-list state return break continue throw class)]
+      [(eq? (findMain expr-list state return break continue throw class) class)  (findMain expr-list state return break continue throw class)]
       [else                                (Mmain (args expr-list) state return break continue throw)])))
 
 (define findMain
@@ -606,17 +606,17 @@
     (list (cons 'this (operandn 2 expr)) (operandn 3 expr) (lambda (env) (functionState expr (outerLayerVars env) env)) class)))
 
 (define classClosure
-  (lambda (expr state)
+  (lambda (expr state throw)
     (list (superClass expr)
      (populateVars (getClosure (evalDefinitionList (getStmtList expr) (newstate))) (superClass expr) state)
-     (getClosure (evalMethodList (getStmtList expr) (newstate) (className expr))))))
+     (getClosure (evalMethodList (getStmtList expr) (newstate) (className expr) throw)))))
 
 
 (define evalDefinitionList
   (lambda (exprs state)
    (if (null? exprs)
       state
-      (evalDefinitionList (modifiers exprs) (evalDefinition (operator exprs state))))))
+      (evalDefinitionList (modifiers exprs) (evalDefinition (operator exprs) state)))))
 
 (define evalDefinition
   (lambda (expr state)
@@ -632,23 +632,22 @@
 
 
 (define evalMethodList
- (lambda (stmts state class)
+ (lambda (stmts state class throw)
    (if (null? stmts)
       state
-      (evalMethodList (modifiers stmts) (evalMethod (operator stmts state)) class))))
-
+      (evalMethodList (modifiers stmts) (evalMethod (operator stmts) state class throw) class throw))))
 
 (define evalMethod
-  (lambda (expr state class)
+  (lambda (expr state class throw)
     (cond
-      ((or (eq? 'function (operator expr)) (eq? 'static-function (operator expr))) (declareFunction expr state class))
+      ((or (eq? 'function (operator expr)) (eq? 'static-function (operator expr))) (declareFunction expr state class throw))
       (else state))))
 
 (define declareFunction
-  (lambda (expr state class)
+  (lambda (expr state class throw)
     (Mdeclare (operand expr)
             (functionClosure expr state class)
-            state)))
+            state throw)))
 
 ; matches the outer variables to the ones within the function
 (define functionState
@@ -716,9 +715,10 @@
 (define Mexpr-global
   (lambda (expr state return break continue throw init-expr-list class)
     (cond
-      [(eq? 'function (operator expr))                  (MfuncDef expr state return break continue throw)]
+      [(eq? 'function (operator expr))                          (MfuncDef expr state return break continue throw)]
       [(eq? '= (operator expr))                      (Massign (leftoperand expr) (rightoperand expr) state throw)]
       [(eq? 'var (operator expr))                   (Mdeclare (leftoperand expr) (rightoperand expr) state throw)]
+      [(eq? 'class (operator expr))                                               (classClosure expr state throw)]
       [else                                                          ('error "Unknown Statement outside of Main")])))
 
 
