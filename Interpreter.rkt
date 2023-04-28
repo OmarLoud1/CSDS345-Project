@@ -461,7 +461,7 @@
   (lambda (val state parent initState)
     (cond
       [(null? parent)  (MfindVar val state)]
-      [(eq? 'err (MreturnVarIfValid val state)) (MfindFunc val (getUpdatedState parent initState) (retrieveParent (MFind parent initState)) initState)]
+      [(eq? 'err (MreturnVarIfValid val state)) (MfindFunc val (getUpdatedState parent initState) (retrieveParent (Mfind parent initState)) initState)]
       [else (MfindVar val state)])))
 
 (define MsearchState
@@ -514,7 +514,7 @@
 
 (define getUpdatedState
   (lambda(parent initState)
-    (cons (retrieveClassFuncs (MFind parent initState)) '())))
+    (cons (retrieveClassFuncs (Mfind parent initState)) '())))
 
 (define getElements cdr)
 (define retrieveParent car)
@@ -839,7 +839,7 @@
       ((eq? object 'super) (objectClosure (superObj ctime-type) state ctime-type))
       ((and (list? object) (eq? (operator object) 'funcall)) (MfuncExecute object state (lambda (s) ('error "no-return-statement")) throw ctime-type)) 
       ((list? object)      (objectClosure object state ctime-type))
-      (else                ('error "lookup-cond not defined")))));;(lookup-cond expr state ctime-type))))) ;; need to implement cond
+      (else                (error "lookup-cond not defined")))));;(lookup-cond expr state ctime-type))))) ;; need to implement cond
 
 (define evalRightDot
   (lambda (expr object state throw ctime-type function)
@@ -870,16 +870,16 @@
       (lambda (return)
         (MfuncExecute expr state return (lambda (s) ('error "no-continue-statement")) throw ctime-type)))))
 
-; handles modifying the state for function calls being defined by the parser.\ 
+; handles modifying the state for function calls being defined by the parser.
 (define MfuncState  
   (lambda (expr state return break continue throw ctime-type)
     (MfuncExecute expr state (lambda (v) state) (lambda (s) ('error "break-out-of-loop")) (lambda (s) (continue s)) throw ctime-type)))
 
 (define MfuncExecute
   (lambda (expr state return continue throw ctime-type)
-    (let* ((dotExp (makeDotExp (getDot expr)))
-           (compileType (MgetState (getClass (evalDotExpression dotExp state throw ctime-type #t))))    
-           (closure (MgetState (body dotExpr) state))
+    (let* ((dotExpr (makeDotExp (getDot expr)))
+           (compileType (MgetState (getClass (evalDotExpression dotExpr state throw ctime-type #t))))    
+           (closure (MfindFunc (body dotExpr) (cons (body compileType) '()) state (firstExpr ctime-type)))
            (inner ((body closure) state))
            (middle (addFrame inner))
            (outer (assignParams (vars closure) (funcargs expr) middle state throw))    
