@@ -213,7 +213,7 @@
 
 (define objectVals
   (lambda (class state ctime-type)
-    (allInstances (getObjExpr (MgetStateLayer class state)) state ctime-type)))
+    (allInstances (getObjExpr (MgetState class state)) state ctime-type)))
 
 (define allInstances
   (lambda (expr state ctime-type)
@@ -511,9 +511,9 @@
 (define Mval
   (lambda (expr state throw ctime-type) 
     (cond
-     [(boolexp? expr state)                                   (Mbool expr state throw)]
-     [(intexp? expr state)                                 (Minteger expr state throw)]
-     [(and (list? expr) (eq? 'funcall (operator expr)))    (MfuncVal expr state throw)]
+     [(boolexp? expr state)                                   (Mbool expr state throw ctime-type)]
+     [(intexp? expr state)                                 (Minteger expr state throw ctime-type)]
+     [(and (list? expr) (eq? 'funcall (operator expr)))    (MfuncVal expr state throw ctime-type)]
      [(and (list? expr) (eq? 'new (operator expr)))        (objectClosure expr state ctime-type)]
      [(list? expr)                                                                expr]
      [else                                                      (MgetState expr state)])))
@@ -796,7 +796,7 @@
      (cond
       ((eq? object 'this)  (MgetStateLayer 'this state))
       ((eq? object 'super) (objectClosure (superObj ctime-type) state ctime-type))
-      ((and (list? object) (eq? (operator object) 'funcall)) (MfuncExecuteNoBreak object state throw ctime-type)) 
+      ((and (list? object) (eq? (operator object) 'funcall)) (MfuncExecute object state (lambda (s) ('error "no-return-statement")) throw ctime-type)) 
       ((list? object)      (objectClosure object state ctime-type))
       (else                ('error "lookup-cond not defined")))));;(lookup-cond expr state ctime-type))))) ;; need to implement cond
 
@@ -827,42 +827,22 @@
   (lambda (expr state throw ctime-type)
     (call/cc
       (lambda (return)
-        (MfuncExecute expr state return (lambda (s) ('error "break-out-of-loop")) (lambda (s) ('error "no-continue-statement")) throw ctime-type)))))
+        (MfuncExecute expr state return (lambda (s) ('error "no-continue-statement")) throw ctime-type)))))
 
 ; handles modifying the state for function calls being defined by the parser.\ 
 (define MfuncState  
   (lambda (expr state return break continue throw ctime-type)
     (MfuncExecute expr state (lambda (v) state) (lambda (s) ('error "break-out-of-loop")) (lambda (s) (continue s)) throw ctime-type)))
-    
-; this will execute a given function call defined in expr
-(define MfuncExecuteNoBreak
-  (lambda (expr state return throw ctime-type)
-    (let* ((closure (MgetState (operand expr) state))
-           (inner ((body closure) state))
-           (middle (addFrame inner))
-           (outer (assignParams (vars closure) (funcargs expr) middle state throw))
-           (dotExp (makeDotExp (getDot expr)))
-           (compileType (MgetStateLayer (getClass (evalDotExpression dotExp state throw ctime-type #t))))        
-           (modCompileType (MgetStateLayer (getStmtList closure) state)))
-           
-    
-     (if (not (eq? (- (length (vars closure)) 1) (length (funcallParams expr))))
-        ('error "Error: Wrong Number of Parameters")
-        (MstateList (getClosureBody closure) outer return 
-                                            (lambda (v) (error "break"))
-                                            (lambda (v) (error "there was no return statement")) 
-                                            throw modCompileType)))))
-
 
 (define MfuncExecute
-  (lambda (expr state return break continue throw ctime-type)
-    (let* ((closure (MgetState (operand expr) state))
+  (lambda (expr state return continue throw ctime-type)
+    (let* ((dotExp (makeDotExp (getDot expr)))
+           (compileType (MgetState (getClass (evalDotExpression dotExp state throw ctime-type #t))))    
+           (closure (MgetState (body dotExpr) state))
            (inner ((body closure) state))
            (middle (addFrame inner))
-           (outer (assignParams (vars closure) (funcargs expr) middle state throw))
-           (dotExp (makeDotExp (getDot expr)))
-           (compileType (MgetStateLayer (getClass (evalDotExpression dotExp state throw ctime-type #t))))        
-           (modCompileType (MgetStateLayer (getStmtList closure) state)))
+           (outer (assignParams (vars closure) (funcargs expr) middle state throw))    
+           (modCompileType (MgetState (getStmtList closure) state)))
            
     
      (cond
@@ -959,7 +939,7 @@
 ; (run-tests 20)
 
 
-(interpret "testII.txt" 'B)
+(interpret "tests4/testIII.txt" 'A)
 
 
 
