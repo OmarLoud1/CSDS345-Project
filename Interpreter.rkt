@@ -446,12 +446,23 @@
       [(not (eq? varName (car (vars layer))))                                 (MgetStateLayer varName (list (cdr (vars layer)) (cdr (vals layer))))]
       [else                                                                        (error 'gStateError "There was a problem finding that variable.")]))) 
 
+(define Mfind
+  (lambda (val state)
+    (MfindVar val state)))
+
 (define MfindVar
   (lambda (val state)
     (let ((rVal (MsearchState val state)))
       (cond
         [(eq? (unbox val)'$null$)   (error 'gStateError "There was a problem finding a var")]
         [else (unbox rVal)]))))
+
+(define MfindFunc
+  (lambda (val state parent initState)
+    (cond
+      [(null? parent)  (MfindVar val state)]
+      [(eq? 'err (MreturnVarIfValid val state)) (MfindFunc val (getUpdatedState parent initState) (retrieveParent (MFind parent initState)) initState)]
+      [else (MfindVar val state)])))
 
 (define MsearchState
   (lambda (val state)
@@ -473,12 +484,42 @@
       [(eq? (hasIndex var (caadr ctime-type)) 0)                                                       (unbox (operator list))]
       [else                                       (MindexSearch (- (hasIndex var (caadr ctime-type)) 1) (cdr (getList state)))])))
 
+(define MreturnVarIfValid
+  (lambda (val state)
+    (let ((rVal (MreturnStateIfValid val state)))
+      (cond
+        [(eq? 'error rVal)                   'err]
+        [(eq? '$null$ (unbox rVal))          'err]
+        [else                        (unbox rVal)]))))
+
+(define MreturnStateIfValid
+  (lambda (val state)
+    (cond
+      [(null? state)  'err]
+      [(inList? val (getElements (headFrame list)))     (MreturnFrameIfValid val (headFrame state))]
+      [else                                           (MreturnStateIfValid val (getElements state))])))
+
+(define MreturnFrameIfValid
+  (lambda (val frame)
+    (cond
+      [(not (inList? val (getElements frame)))                 'err]
+      [else                                     (MgetStateLayer val frame)])))
+
 (define inList?
   (lambda (val list)
     (cond
-      [(null? list)                                #f]
-      [(eq? val (car list))                        #t]
-      [else                  (inList? val (cdr list))])))
+      [(null? list)                                        #f]
+      [(eq? val (car list))                                #t]
+      [else                  (inList? val (getElements list))])))
+
+(define getUpdatedState
+  (lambda(parent initState)
+    (cons (retrieveClassFuncs (MFind parent initState)) '())))
+
+(define getElements cdr)
+(define retrieveParent car)
+(define headFrame car)
+(define retrieveClassFuncs caddr)
 
 (define hasIndex
   (lambda (val list)
