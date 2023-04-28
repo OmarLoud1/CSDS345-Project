@@ -86,7 +86,7 @@
 ;retruns the variables from the state
 (define stateVars
   (lambda (state)
-    (car (car state))))
+    j(car (car state))))
 
 ;returns the values from the state
 (define stateVals
@@ -380,7 +380,7 @@
       [(eq? (operator expr) 'funcall)                                           (MfuncState expr state return break continue throw ctime-type)]
       [(eq? (operator expr) 'return)                                     (Mreturn (operand expr) state return break continue throw ctime-type)]
       [(eq? (operator expr) 'var)                                     (Mdeclare (leftoperand expr) (rightoperand expr) state throw ctime-type)]
-      [(eq? (operator expr) '=)                           (Mupdate (leftoperand expr) (Mval (rightoperand expr) state throw ctime-type) state ctime-type)]
+      [(eq? (operator expr) '=)                           (Mupdate (leftoperand expr) (Mval (rightoperand expr) state throw ctime-type) state throw ctime-type)]
       [(eq? (operator expr) 'if)      (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw ctime-type)]
       [(eq? (operator expr) 'while)                              (Mwhile (leftoperand expr) (rightoperand expr) state return throw ctime-type)]
       [(eq? (operator expr) 'break)                                                                                       (Mbreak state break)] ; does not need to include compile type
@@ -412,13 +412,13 @@
 (define Mbool
   (lambda (expr state throw ctime-type)
     (cond
-      [(boolean? expr)                                                                                                      expr]
-      [(eq? 'true expr)                                                                                                       #t]
-      [(eq? 'false expr)                                                                                                      #f]
-      [(not (list? expr))                                                                                 (MgetState expr state)]
+      [(boolean? expr)                                                                                                                            expr]
+      [(eq? 'true expr)                                                                                                                             #t]
+      [(eq? 'false expr)                                                                                                                            #f]
+      [(not (list? expr))                                                                                                       (MgetState expr state)]
       [(eq? (operator expr) '&&)              (and (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
       [(eq? (operator expr) '||)               (or (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
-      [(eq? (operator expr) '!)                                                      (not (Mval (leftoperand expr) state throw ctime-type))]
+      [(eq? (operator expr) '!)                                                                 (not (Mval (leftoperand expr) state throw ctime-type))]
       [(eq? (operator expr) '==)              (eq? (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
       [(eq? (operator expr) '!=)             (neq? (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
       [(eq? (operator expr) '<)                 (< (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
@@ -491,7 +491,7 @@
   (cond
       ((not (member?* 'this state)) (find val state))
       (else (indexSearch (getIndex val (getObjVars ctime-type) #f)
-                               (reverse (getObjVals (find 'this state))))))))
+                               (reverse (getObjVals (find 'this state))) ctime-type)))))
 
 (define getIndex
   (lambda (val list inlist)
@@ -671,11 +671,17 @@
 
 ;updates the state instead of deleting and adding again
 (define Mupdate
-  (lambda (varName val state ctime-type)
+  (lambda (varName val state throw ctime-type)
     (cond
-      [(null? state)                                              (error 'gStateError "The variable has not been declared.")]
-      [(contains? varName (stateVars state))  (cons (begin (Mupdate_layer varName val (car state)) (car state)) (cdr state) ctime-type)]
-      [else                                                             (cons (car state) (Mupdate varName val (cdr state) ctime-type))])))
+      [(null? state)                                              '$null$] ; (error 'gStateError "The variable has not been declared.")
+      [(and (eq? (isDot (list varName val)) 'dot)
+            (not (null? (Mupdate (dotAssignStmt (list varName val)) (Mval val state throw ctime-type)
+                                 (cons (cons (getObjVars (findCond (getClass (evalDotExpression (getDot (list varName val)) state throw ctime-type #t))
+                                                                   state ctime-type))
+                                             (cons (getObjVals (evalDotExpression (getDot (list varName val)) state throw ctime-type #t)) '())) '())))))
+       state]
+      [(contains? varName (stateVars state))  (cons (begin (Mupdate_layer varName val (car state) ctime-type) (car state)) (cdr state))]
+      [else                                                             (cons (car state) (Mupdate varName val (cdr state) throw ctime-type))])))
 
 ; Gets the value of a variable
 (define Mupdate_layer
