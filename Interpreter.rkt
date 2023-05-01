@@ -210,11 +210,11 @@
   
 
 (define populateVars
-  (lambda (vars parent state)
+  (lambda (newVars parent state)
     (cond
-      ((null? parent) vars)
-      (else (cons (append (car vars) (caadr (MgetStateLayer parent state)))
-      (cons (append (cadr vars) (getObjExpr (MgetStateLayer parent state))) '()))))))
+      [(null? parent) newVars]
+      [else (cons (append (vars newVars) (instanceVars (MgetState parent state)))
+                  (cons (append (operand newVars) (getObjExpr (MgetState parent state))) '()))])))
 
 (define objectVals
   (lambda (class state ctime-type)
@@ -436,7 +436,7 @@
 (define MgetState
   (lambda (varName state)
     (cond
-      [(null? state)                             (error 'gStateError "The variable has not been declared.")]
+      [(null? state)                             (error 'gStateError (string-append "The variable has not been declared." (format "~a" varName)))]
       [(contains? varName (stateVars state))                          (MgetStateLayer varName (car state))]
       [else                                                                 (MgetState varName (cdr state))])))
 
@@ -482,7 +482,7 @@
   (lambda (val state pastState parent)
     (cond
       [(null? parent)  (findVar val state)]
-      [(eq? 'err (returnVarIfValid val state)) (findFunc val (getUpdatedState parent pastState) (retrieveParent (find parent pastState)) pastState)]
+      [(eq? 'err (returnVarIfValid val state)) (findFunc val (getUpdatedState parent pastState) pastState (retrieveParent (find parent pastState)))]
       [else (findVar val state)])))
 
 (define findCond
@@ -496,7 +496,7 @@
   (cond
       ((not (member?* 'this state)) (find val state))
       (else (indexSearch (getIndex val (getObjVars ctime-type) #f)
-                               (reverse (getObjVals (find 'this state))) ctime-type)))))
+                               (reverse (getObjVals (find 'this state))))))))
 
 (define getIndex
   (lambda (val list inlist)
@@ -527,6 +527,12 @@
       [else                                            (MgetState val frame)])))
 
 (define indexSearch
+  (lambda (index l)
+    (cond
+      [(zero? index) (unbox (operator l))]
+      [else (indexSearch (- index 1) (cdr l))])))
+
+(define indexUpdate
   (lambda (var state ctime-type)
     (cond
       [(not (member?* 'this state))                                                                      (findVar var state)]
@@ -538,8 +544,8 @@
     (let ((rVal (returnStateIfValid val state)))
       (cond
         [(eq? 'err rVal)                   'err]
-        [(eq? '$null$ (unbox rVal))          'err]
-        [else                        (unbox rVal)]))))
+        [(eq? '$null$ rVal)          'err]
+        [else                        rVal]))))
 
 (define returnStateIfValid
   (lambda (val state)
@@ -553,13 +559,6 @@
     (cond
       [(not (member? val (vars frame)))                 'err]
       [else                                     (MgetStateLayer val frame)])))
-
-(define inList?
-  (lambda (val list)
-    (cond
-      [(null? list)                                        #f]
-      [(eq? val (car list))                                #t]
-      [else                  (inList? val (getElements list))])))
 
 (define getUpdatedState
   (lambda(parent pastState)
@@ -607,6 +606,7 @@
      [(and (list? expr) (eq? 'new (operator expr)))         (objectClosure expr state ctime-type)]
      [(and (list? expr) (eq? 'dot (operator expr)))    (evalDotExpression expr state throw ctime-type #f)]
      [(list? expr)                                                                           expr]
+     [(eq? (MgetStateProtected expr state) '$null$)                     (findCond expr state ctime-type)]
      [else                                                      (MgetState expr state)])))
   
 
@@ -682,7 +682,7 @@
       [(and (eq? (operator varName) 'dot)
             (not (null? (MupdateInstance (dotAssignStmt varName) val
                                  (cons (cons (getObjVars (findCond (getClass (evalDotExpression varName state throw ctime-type #t)) state ctime-type))
-                                             (cons (getObjVals (evalDotExpression varName) state throw ctime-type #t) '()))
+                                             (cons (getObjVals (evalDotExpression varName state throw ctime-type #t)) '()))
                                        '())))))
        state]
       [(contains? varName (stateVars state))  (cons (begin (Mupdate_layer varName val (car state) ctime-type) (car state)) (cdr state))]
@@ -904,7 +904,7 @@
   (lambda (expr state)
       (cond
         ((validOperand expr) (StateUpdate (list (operand expr) (rightoperand expr)) state))
-        (else (Mdeclare (operand expr) '$null$ state)))))
+        (else (StateUpdate (list (operand expr) '$null$) state)))))
 
 
 (define evalMethodList
@@ -988,7 +988,7 @@
   (lambda (expr state return continue throw ctime-type)
     (let* ((dotExpr (makeDotExp (getDot expr)))
            (compileType (MgetState (getClass (evalDotExpression dotExpr state throw ctime-type #t)) state))    
-           (closure (findFuncCond (body dotExpr) (cons (body compileType) '()) state (firstExpr ctime-type)))
+           (closure (findFuncCond (body dotExpr) (cons (body compileType) '()) state (firstExpr compileType)))
            (inner ((body closure) state))
            (middle (addFrame inner))
            (outer (assignParams (vars closure) (cons (findThis (getLeftDot dotExpr) state throw ctime-type) (funcargs expr)) middle state throw ctime-type))    
@@ -1086,13 +1086,13 @@
                           (displayln "no output: test passed! if error, it is thrown below:")
                           (displayln" ")
                           (let* ([test-file (format "tests3/test~a.txt" i)]
-                                 [expected-output (with-input-from-file (format "tests3/test~a-output.txt" i) read)])
+                                 [expected-output (with-input-from-file (format "tests4/test~a-output.txt" i) read)])
                              (check-equal? (interpret (parser test-file)) expected-output)))])))
 
-; (run-tests 20)
+; (run-tests 6)
 
 
-(interpret "tests4/test4.txt" 'A)
+(interpret "tests4/test8.txt" 'Square)
 
 
 
