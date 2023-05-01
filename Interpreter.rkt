@@ -33,6 +33,12 @@
   (lambda (list)
     (car list)))
 
+(define protectedOperator
+  (lambda (list)
+    (if (list? list)
+        (operator list)
+        '())))
+
 ;gets the arguments of an expression
 (define args
   (lambda (list)
@@ -86,7 +92,7 @@
 ;retruns the variables from the state
 (define stateVars
   (lambda (state)
-    j(car (car state))))
+    (car (car state))))
 
 ;returns the values from the state
 (define stateVals
@@ -203,7 +209,6 @@
     (car expr)))
   
 
-
 (define populateVars
   (lambda (vars parent state)
     (cond
@@ -269,7 +274,7 @@
 
 (define dotAssignStmt
   (lambda (expr)
-     (car (cddadr expr))))
+     (caddr expr)))
 
 (define getNextObj 
   (lambda (expr)
@@ -484,7 +489,7 @@
   (lambda (val state parent)
       (cond
         ((eq? 'err (returnVarIfValid val state)) (searchByIndex val state parent))
-        (else (findFunc val state)))))
+        (else (findVar val state)))))
 
 (define searchByIndex
   (lambda (val state ctime-type)
@@ -674,23 +679,66 @@
   (lambda (varName val state throw ctime-type)
     (cond
       [(null? state)                                              '$null$] ; (error 'gStateError "The variable has not been declared.")
-      [(and (eq? (isDot (list varName val)) 'dot)
-            (not (null? (Mupdate (dotAssignStmt (list varName val)) (Mval val state throw ctime-type)
-                                 (cons (cons (getObjVars (findCond (getClass (evalDotExpression (getDot (list varName val)) state throw ctime-type #t))
-                                                                   state ctime-type))
-                                             (cons (getObjVals (evalDotExpression (getDot (list varName val)) state throw ctime-type #t)) '())) '())))))
+      [(and (eq? (operator varName) 'dot)
+            (not (null? (MupdateInstance (dotAssignStmt varName) val
+                                 (cons (cons (getObjVars (findCond (getClass (evalDotExpression varName state throw ctime-type #t)) state ctime-type))
+                                             (cons (getObjVals (evalDotExpression varName) state throw ctime-type #t) '()))
+                                       '())))))
        state]
       [(contains? varName (stateVars state))  (cons (begin (Mupdate_layer varName val (car state) ctime-type) (car state)) (cdr state))]
-      [else                                                             (cons (car state) (Mupdate varName val (cdr state) throw ctime-type))])))
+      [else                                        (cons (car state) (MupdateStaticProtected varName val (cdr state) throw))])))
+
+(define MupdateInstance
+  (lambda (var val state)
+    (if (member?* var state)
+        (MupdateExistingInstance var val state)
+        (error 'gStateError (string-append "That variable does not exist:" (format "~a" var))))))
+
+(define MupdateExistingInstance
+  (lambda (var val state)
+    (if (member? var (vars (firstExpr state)))
+        (cons (begin (Mupdate_layer var val (car state)) (car state)) (cdr state))
+        (cons (firstExpr state) (MupdateExistingInstance var val (args state))))))
+
+; exists to change the variable but needs to check whether it is in a local environment or non-static
+(define MupdateStaticProtected
+  (lambda (var val state ctime-type)
+    (cond
+      [(and (eq? '$null$ (MupdateCheck var val state)) (not (null? (MupdateReverse var val state ctime-type)))) state]
+      [else (MupdateInstance var val state)])))
+
+; Changes the binding of the variable if it exists in the environment
+(define MupdateCheck
+  (lambda (var val state)
+    (if (member?* var state)
+        (MupdateExistingInstance var val state)
+         (error 'gStateError (string-append "That variable does not exist:" (format "~a" var))))))
+
+(define MupdateReverse
+  (lambda (var val state ctime-type)
+    (cond
+      [(not (member?* 'this state)) (MupdateExistingInstance var val state)]
+      [else (unbox (operandn (+ 1 (index? var (instanceVars ctime-type) #f)) (reverse (instanceVals (MgetState 'this state)))))])))
+
+(define instanceVars caadr)
+(define instanceVals cadr)
+
+(define index?
+  (lambda (var l seen?)
+    (cond
+      [(null? l) 0]
+      [(eq? seen? #t) (+ 1 (index? var (cdr l) seen?))]
+      [(eq? var (operator l)) (index? var (cdr l) #t)]
+      [else (index? var (cdr l) seen?)])))
 
 ; Gets the value of a variable
 (define Mupdate_layer
-  (lambda (varName val layer ctime-type)
+  (lambda (varName val layer)
     (cond
       [(or (null? (vals layer)) (null? (vars layer)))                                  (error 'gStateError "There was a problem finding that variable.")]
       [(and (eq? varName (car (vars layer))) (eq? '$null$ (car (vals layer))))       (error 'gStateError "This variable has not been assigned a value.")]
       [(eq? varName (car (vars layer)))                                                                                 (set-box (car (vals layer)) val)]
-      [(not (eq? varName (car (vars layer))))                                   (Mupdate_layer varName val (list (cdr (vars layer)) (cdr (vals layer))) ctime-type)]
+      [(not (eq? varName (car (vars layer))))                                   (Mupdate_layer varName val (list (cdr (vars layer)) (cdr (vals layer))))]
       [else                                                                            (error 'gStateError "There was a problem finding that variable.")])))  
 
 ; helper that calls break
@@ -898,7 +946,7 @@
      (cond
       ((eq? function #t) object)
       (else (Mval expr (cons (cons (getObjVars (MgetState (getClass object) state))
-                       (cons (getObjVals object) '()))'()) throw ctime-type)))))
+                       (cons (getObjVals object) '())) '()) throw ctime-type)))))
 
 (define findThis
   (lambda (object state throw ctime-type)
