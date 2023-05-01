@@ -545,13 +545,13 @@
   (lambda (val state)
     (cond
       [(null? state)  'err]
-      [(inList? val (getElements (headFrame state)))     (returnFrameIfValid val (headFrame state))]
+      [(member? val (vars (headFrame state)))     (returnFrameIfValid val (headFrame state))]
       [else                                           (returnStateIfValid val (getElements state))])))
 
 (define returnFrameIfValid
   (lambda (val frame)
     (cond
-      [(not (inList? val (getElements frame)))                 'err]
+      [(not (member? val (vars frame)))                 'err]
       [else                                     (MgetStateLayer val frame)])))
 
 (define inList?
