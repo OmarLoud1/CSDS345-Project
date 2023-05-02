@@ -1196,6 +1196,10 @@
 
  (run-tests 13)
 
+; (run-tests 6)
+
+
+; (interpret "tests4/test13.txt" 'c)
 
 
 
