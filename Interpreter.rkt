@@ -2,7 +2,7 @@
 ;;;; Group 6: Omar Loudghiri(oxl51), Kyler Rosen(kkr33), Niels Sogaard(nks69)
 ;;;; CSDS 345 Spring 2023
 ;;;; Project Part 4
-;;;; 04/27/2023
+;;;; 05/01/2023
 ;;;; ***************************************************
 
 
@@ -33,6 +33,7 @@
   (lambda (list)
     (car list)))
 
+;gets the portected operator in an expression
 (define protectedOperator
   (lambda (list)
     (if (list? list)
@@ -190,103 +191,154 @@
   (lambda (list)
     (cdr (cdr list))))
 
+;gets the list of expressions
 (define getStmtList
   (lambda (list)
     (cadddr list)))
 
+;gets the expression of an object instance
 (define getObjExpr
   (lambda (object)
     (cadadr object)))
 
+;gets the super class of the instance
 (define superClass
   (lambda (expr)
     (cond
       ((null?  (car (cddr expr))) '())
       (else (car (cdr (caddr expr)))))))
 
+;gets the class in an expression
 (define getClass
   (lambda (expr)
     (car expr)))
   
-
+;gets the variable values from the state
 (define populateVars
   (lambda (newVars parent state)
     (cond
       [(null? parent) newVars]
       [else (cons (append (vars newVars) (instanceVars (MgetState parent state)))
                   (cons (append (operand newVars) (getObjExpr (MgetState parent state))) '()))])))
-
+;gets the variable values
 (define objectVals
   (lambda (class state ctime-type)
     (allInstances (getObjExpr (MgetState class state)) state ctime-type)))
 
+;gets all the values of an instance
 (define allInstances
   (lambda (expr state ctime-type)
     (cond
       ((null? expr) '())
-      (else (cons (box (Mval (unbox (operator expr))
-                                        state
-                                        (lambda (v state1) (error "exception thrown"))
-                                        ctime-type))
+      (else (cons (box (Mval (unbox (operator expr)) state (lambda (v state1) (error "exception thrown")) ctime-type))
                   (allInstances (modifiers expr) state ctime-type))))))
 
-
+;checks if there is an operand
 (define validOperand
   (lambda (expr)
     (not (null? (cdr (cdr expr))))))
 
+;gets the class name
 (define className
   (lambda (expr)
     (cadr expr)))
 
-
+;get the variable of an instance
 (define getObjVars
   (lambda (expr)
     (caadr expr)))
 
+;gets the values of the variables of an instance
 (define getObjVals
   (lambda (expr)
     (cadr expr)))
 
+;gets the left part of a dot expression
 (define getLeftDot
   (lambda (expr)
     (cadr expr)))
 
+;gets the right part of a dot expression
 (define getRightDot
   (lambda (expr)
     (caddr expr)))
 
+;gets the dot expression
 (define getDot
   (lambda (expr)
     (cadr expr)))
 
+;checks if it's a valid dot expression
 (define isDot
   (lambda (expr)
     (cond
       ((list? (operand expr)) (caadr expr))
       (else (operand expr)))))
 
+;makes a dot expression in the context of the this operator
 (define makeDotExp
   (lambda (expr)
     (cond
       ((list? expr) expr)
       (else (cons 'dot (cons 'this (cons expr '())))))))
 
+;gets the assign statement
 (define dotAssignStmt
   (lambda (expr)
      (caddr expr)))
 
+;gets the next object
 (define getNextObj 
   (lambda (expr)
      (cadadr expr)))
 
+;gets the next function 
 (define getNextFunc 
   (lambda (expr)
     (car (cadadr expr))))
 
+;gets the super class of an object
 (define superObj
   (lambda (closure)
     (cons 'new (cons (getClass closure) '()))))
+
+;get the class declaration
+(define getClassDec
+  (lambda (expr-list)
+    (cadar expr-list)))
+
+;gets the instance variables
+(define instanceVars
+  (lambda (expr)
+    (caadr expr)))
+
+;gets the values of the vars
+(define instanceVals
+  (lambda (expr)
+    (cadr expr)))
+
+
+; gets the elements
+(define getElements
+  (lambda (lst)
+    (cdr lst)))
+
+; gets the parent 
+(define retrieveParent
+  (lambda (lst)
+    (car lst)))
+
+; gets the head frame 
+(define headFrame
+  (lambda (lst)
+    (car lst)))
+
+; gets the class functions 
+(define retrieveClassFuncs
+  (lambda (lst)
+    (caddr lst)))
+
+
 
 
 ;;;; ***************************************************
@@ -314,7 +366,6 @@
     (cond 
       [(null? list)                                                          #f]
       [(list? (car list))  (or (member?* a (car list)) (member?* a (cdr list)))]
-      ;[(and (box? (car list)) (list? (unbox (car list))))    (or (member?* a (unbox (car list))) (member?* a (cdr list)))]
       [(eq? a (car list))                                                    #t]
       [else                                             (member?* a (cdr list))])))
 
@@ -359,7 +410,8 @@
 (define addFrame
   (lambda (state)
       (cons (newframe) state)))
-      
+
+;returns true if a varibale doesn't exist
 (define returnNotExist
   (lambda (expr)
     (cond
@@ -386,11 +438,11 @@
       [(eq? (operator expr) 'funcall)                                           (MfuncState expr state return break continue throw ctime-type)]
       [(eq? (operator expr) 'return)                                     (Mreturn (operand expr) state return break continue throw ctime-type)]
       [(eq? (operator expr) 'var)                                     (Mdeclare (leftoperand expr) (rightoperand expr) state throw ctime-type)]
-      [(eq? (operator expr) '=)                           (Mupdate (leftoperand expr) (Mval (rightoperand expr) state throw ctime-type) state throw ctime-type)]
+      [(eq? (operator expr) '=)          (Mupdate (leftoperand expr) (Mval (rightoperand expr) state throw ctime-type) state throw ctime-type)]
       [(eq? (operator expr) 'if)      (Mif (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw ctime-type)]
       [(eq? (operator expr) 'while)                              (Mwhile (leftoperand expr) (rightoperand expr) state return throw ctime-type)]
-      [(eq? (operator expr) 'break)                                                                                       (Mbreak state break)] ; does not need to include compile type
-      [(eq? (operator expr) 'continue)                                                                              (Mcontinue state continue)] ; does not need to include compile type
+      [(eq? (operator expr) 'break)                                                                                       (Mbreak state break)] 
+      [(eq? (operator expr) 'continue)                                                                              (Mcontinue state continue)] 
       [(eq? (operator expr) 'begin)                                          (Mbegin (args expr) state return break continue throw ctime-type)]
       [(eq? (operator expr) 'try)    (Mtry (operandn 1 expr) (operandn 2 expr) (operandn 3 expr) state return break continue throw ctime-type)]
       [(eq? (operator expr) 'throw)                                                 (throw (Mval (operand expr) state throw ctime-type) state)]
@@ -401,16 +453,16 @@
 (define Minteger
   (lambda (expr state throw ctime-type)
     (cond
-      [(number? expr)                                                                                               expr]
-      [(box? expr)                                                                                          (unbox expr)]
-      [(not (list? expr))                                                                         (MgetState expr state)]
-      [(and (empty? (rightoperand expr)) (eq? (operator expr) '-))          (- 0  (Mval (leftoperand expr) state throw ctime-type))]
+      [(number? expr)                                                                                                                     expr]
+      [(box? expr)                                                                                                                (unbox expr)]
+      [(not (list? expr))                                                                                               (MgetState expr state)]
+      [(and (empty? (rightoperand expr)) (eq? (operator expr) '-))                     (- 0  (Mval (leftoperand expr) state throw ctime-type))]
       [(eq? (operator expr) '+) (+         (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
       [(eq? (operator expr) '-) (-         (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
       [(eq? (operator expr) '*) (*         (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
       [(eq? (operator expr) '/) (quotient  (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
       [(eq? (operator expr) '%) (remainder (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
-      [else                                                                            (Mval expr state throw ctime-type)]))) 
+      [else                                                                                               (error 'unknownop "Bad Operator")]))) 
 
 
 
@@ -431,31 +483,33 @@
       [(eq? (operator expr) '>)                 (> (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
       [(eq? (operator expr) '<=)               (<= (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
       [(eq? (operator expr) '>=)               (>= (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
-      [else                                                                                    (Mval expr state throw ctime-type)])))
+      [else                                                                                                      (Mval expr state throw ctime-type)])))
 
 ; Gets the state of the variable from state
 (define MgetState
   (lambda (varName state)
     (cond
       [(null? state)                             (error 'gStateError (string-append "The variable has not been declared: " (format "~a" varName)))]
-      [(contains? varName (stateVars state))                          (MgetStateLayer varName (car state))]
-      [else                                                                 (MgetState varName (cdr state))])))
+      [(contains? varName (stateVars state))                                                                  (MgetStateLayer varName (car state))]
+      [else                                                                                                     (MgetState varName (cdr state))])))
 
+;Gets the state of a protected variable and handles when the value is null
 (define MgetStateProtected
   (lambda (varName state)
     (cond
-      [(null? state)                                                                               '$null$] ; warning, this is a hella hack
-      [(contains? varName (stateVars state))                          (MgetStateLayerProtected varName (car state))]
-      [else                                                       (MgetStateProtected varName (cdr state))])))
+      [(null? state)                                                                             '$null$] 
+      [(contains? varName (stateVars state))               (MgetStateLayerProtected varName (car state))]
+      [else                                                  (MgetStateProtected varName (cdr state))])))
 
+;gets the value of a variable and handles when the value is null
 (define MgetStateLayerProtected
   (lambda (varName layer)
     (cond
-      [(or (null? (vals layer)) (null? (vars layer)))                              '$null$]
-      [(and (eq? varName (car (vars layer))) (eq? '$null$ (car (vals layer))))   '$null$]
-      [(eq? varName (car (vars layer)))                                                                                   (unbox (car (vals layer)))]
-      [(not (eq? varName (car (vars layer))))                                 (MgetStateLayerProtected varName (list (cdr (vars layer)) (cdr (vals layer))))]
-      [else                                                                        '$null$])))
+      [(or (null? (vals layer)) (null? (vars layer)))                                                                   '$null$]
+      [(and (eq? varName (car (vars layer))) (eq? '$null$ (car (vals layer))))                                          '$null$]
+      [(eq? varName (car (vars layer)))                                                              (unbox (car (vals layer)))]
+      [(not (eq? varName (car (vars layer))))    (MgetStateLayerProtected varName (list (cdr (vars layer)) (cdr (vals layer))))]
+      [else                                                                                                          '$null$])))
 
 
 ; Gets the value of a variable
@@ -468,30 +522,29 @@
       [(not (eq? varName (car (vars layer))))                                 (MgetStateLayer varName (list (cdr (vars layer)) (cdr (vals layer))))]
       [else                                                                        (error 'gStateError "There was a problem finding that variable.")]))) 
 
+;finds a value in a state
 (define find
   (lambda (val state)
     (findVar val state)))
 
+;finds a variable in the state
 (define findVar
   (lambda (val state)
-    (let ((rVal (MgetState val state))) ; warning: i fucked with this
+    (let ((rVal (MgetState val state)))
       (cond
         [(eq? val '$null$)   (error 'gStateError "There was a problem finding a var")]
-        [else rVal]))))
+        [else                                                                rVal]))))
 
-(define findFunc
-  (lambda (val state pastState parent)
-    (cond
-      [(null? parent)  (findVar val state)]
-      [(eq? 'err (returnVarIfValid val state)) (findFunc val (getUpdatedState parent pastState) pastState (retrieveParent (find parent pastState)))]
-      [else (findVar val state)])))
+                                                                                                              
 
+;finds a a varibale in the different object states
 (define findCond
   (lambda (val state parent)
       (cond
         ((eq? 'err (returnVarIfValid val state)) (searchByIndex val state parent))
         (else (findVar val state)))))
 
+;reverse index search function
 (define searchByIndex
   (lambda (val state ctime-type)
   (cond
@@ -499,6 +552,7 @@
       (else (indexSearch (getIndex val (getObjVars ctime-type) #f)
                                (reverse (getObjVals (find 'this state))))))))
 
+;reverse index find helper
 (define getIndex
   (lambda (val list inlist)
     (cond
@@ -507,13 +561,22 @@
       ((eq? (operator list) val) (+ 0 (getIndex val (cdr list) #t)))
       (else (+ 0 (getIndex val (cdr list) inlist))))))
 
-
+;finds a function in the object closures
 (define findFuncCond
   (lambda (val state pastState parent)
       (cond
         ((eq? '$null$ (MgetStateProtected val pastState)) (findFunc val state pastState parent))
         (else (findVar val pastState)))))
 
+;helper to the function finder
+(define findFunc
+  (lambda (val state pastState parent)
+    (cond
+      [(null? parent)                                                                                                               (findVar val state)]
+      [(eq? 'err (returnVarIfValid val state))     (findFunc val (getUpdatedState parent pastState) pastState (retrieveParent (find parent pastState)))]
+      [else     (findVar val state)])))
+
+;searches for a variable in the current state
 (define searchState
   (lambda (val state)
     (cond 
@@ -521,18 +584,21 @@
     [(member? val (vars (firstExpr state)))      (searchFrame val (car state))]
     [else                           (searchState val (cdr state))])))
 
+;searches for a variable in the frame
 (define searchFrame
   (lambda (val frame)
     (cond
       [(not (member? val (vars frame)))  (error "Could not find variable in frame.")]
       [else                                            (MgetState val frame)])))
 
+;index search
 (define indexSearch
   (lambda (index l)
     (cond
       [(zero? index) (unbox (operator l))]
       [else (indexSearch (- index 1) (cdr l))])))
 
+;updates the index where a variable is stored
 (define indexUpdate
   (lambda (var state ctime-type)
     (cond
@@ -540,6 +606,7 @@
       [(eq? (hasIndex var (caadr ctime-type)) 0)                                                       (unbox (operator list))]
       [else                                       (indexSearch (- (hasIndex var (caadr ctime-type)) 1) (cdr (getList state)))])))
 
+;checks variable is valid before returning its state
 (define returnVarIfValid
   (lambda (val state)
     (let ((rVal (returnStateIfValid val state)))
@@ -548,6 +615,7 @@
         [(eq? '$null$ rVal)          'err]
         [else                        rVal]))))
 
+;checks the state is not null before recursing through it
 (define returnStateIfValid
   (lambda (val state)
     (cond
@@ -555,27 +623,27 @@
       [(member? val (vars (headFrame state)))     (returnFrameIfValid val (headFrame state))]
       [else                                           (returnStateIfValid val (getElements state))])))
 
+;checks the return is valid and returns it
 (define returnFrameIfValid
   (lambda (val frame)
     (cond
       [(not (member? val (vars frame)))                 'err]
       [else                                     (MgetStateLayer val frame)])))
 
+;gets the updated state
 (define getUpdatedState
   (lambda(parent pastState)
     (cons (retrieveClassFuncs (find parent pastState)) '())))
 
-(define getElements cdr)
-(define retrieveParent car)
-(define headFrame car)
-(define retrieveClassFuncs caddr)
 
+;index search helper
 (define hasIndex
   (lambda (val list)
   (cond 
     [(eq? val (car list))                                0]
     [else                  (+ 1 (hasIndex val (cdr list)))])))
-  
+
+;get the reversed list of a state
 (define getList
   (lambda (state)
     (reverse (caadr (findVar 'this state)))))
@@ -628,7 +696,7 @@
     (call/cc
       (lambda (break)
         (cond
-          [(Mbool condition state throw ctime-type) (Mwhile condition expr (Mstate expr state return break 
+          [(Mbool condition state throw) (Mwhile condition expr (Mstate expr state return break 
                                          (lambda (state2) (break (Mwhile condition expr state2 return throw ctime-type))) throw ctime-type) return throw ctime-type)]
           [else                                                                                                               state])))))
 
@@ -680,23 +748,26 @@
 (define Mupdate
   (lambda (varName val state throw ctime-type)
     (cond
-      [(null? state)                                              '$null$] ; (error 'gStateError "The variable has not been declared.")
+      [(null? state)                                                                                                   '$null$]
       [(and (eq? (protectedOperator varName) 'dot)
             (not (null? (MupdateInstance (dotAssignStmt varName) val
                                  (cons (cons (getObjVars (findCond (getClass (evalDotExpression varName state throw ctime-type #t)) state ctime-type))
                                              (cons (getObjVals (evalDotExpression varName state throw ctime-type #t)) '()))
                                        '())))))
-       state]
-      [(contains? varName (stateVars state))  (cons (begin (Mupdate_layer varName val (car state)) (car state)) (cdr state))]
-      [else                                        (MupdateStaticProtected varName val state ctime-type)])))
-      ;[else                                        (cons (car state) (MupdateStaticProtected varName val (cdr state) throw))])))
+       
+                                                                                                                        state]
+      [(contains? varName (stateVars state))   (cons (begin (Mupdate_layer varName val (car state)) (car state)) (cdr state))]
+      [else                                                          (MupdateStaticProtected varName val state ctime-type)])))
 
+
+;updates the state of an instance
 (define MupdateInstance
   (lambda (var val state)
     (if (member?* var state)
         (MupdateExistingInstance var val state)
         (error 'gStateError (string-append "That variable does not exist: " (format "~a" var))))))
 
+;updates the value of an already existing instance
 (define MupdateExistingInstance
   (lambda (var val state)
     (if (member? var (vars (firstExpr state)))
@@ -710,7 +781,7 @@
       [(and (eq? '$null$ (MupdateCheck var val state)) (not (null? (MupdateReverse var val state ctime-type)))) state]
       [else (MupdateInstance var val state)])))
 
-
+;chechs a var is in the state, specific to the new Mupdate
 (define contained?*
   (lambda (var state)
     (cond
@@ -718,6 +789,7 @@
       [(contained? var (vars (firstExpr state))) #t]
       [else (contained?* var (args state))])))
 
+;helper the the above function
 (define contained?
   (lambda (var state)
     (cond
@@ -738,15 +810,17 @@
       [(zero? index) (set-box (operator l) val)]
       [else (refreshIndex (- index 1) val (cdr l))])))
 
+;updates the 
 (define MupdateReverse
   (lambda (var val state ctime-type)
     (cond
-      [(not (member?* 'this state)) (MupdateExistingInstance var val state)]
-      [else (refreshIndex (index? var (instanceVars ctime-type) #f) val (reverse (instanceVals (MgetState 'this state))))])))
+      [(not (member?* 'this state))                               (MupdateExistingInstance var val state)]
+      [else                        (refreshIndex (index? var (instanceVars ctime-type) #f)
+                                                 val (reverse (instanceVals (MgetState 'this state))))])))
 
-(define instanceVars caadr)
-(define instanceVals cadr)
 
+
+;returns the index of when a variable is first seen
 (define index?
   (lambda (var l seen?)
     (cond
@@ -763,7 +837,7 @@
       [(and (eq? varName (car (vars layer))) (eq? '$null$ (car (vals layer))))       (error 'gStateError "This variable has not been assigned a value.")]
       [(eq? varName (car (vars layer)))                                                                                 (set-box (car (vals layer)) val)]
       [(not (eq? varName (car (vars layer))))                                   (Mupdate_layer varName val (list (cdr (vars layer)) (cdr (vals layer))))]
-      [else                                                                            (error 'gStateError "There was a problem finding that variable.")])))  
+      [else                                                                         (error 'gStateError "There was a problem finding that variable.")])))
 
 ; helper that calls break
 (define Mbreak
@@ -790,9 +864,9 @@
   (lambda (declared state)
     (cond
       [(and (eq? (vals declared) "true") (neq? (vars declared) 'return))    (list (list (cons (vars declared) (stateVars state))
-                                                                                  (cons (box #t) (stateVals state))) (cdr state))]
-      [(and (eq? (vals declared) "false") (neq? (vars declared) 'return))   (list (list (cons (vars declared) (stateVars state))
-                                                                                  (cons (box #f) (stateVals state))) (cdr state))]
+                                                                                     (cons (box #t) (stateVals state))) (cdr state))]
+      [(and (eq? (vals declared) "false") (neq? (vars declared) 'return))    (list (list (cons (vars declared) (stateVars state))
+                                                                                     (cons (box #f) (stateVals state))) (cdr state))]
       [else                                                          (cons  (list (cons (vars declared) (stateVars state))
                                                                                   (cons (box (vals declared)) (stateVals state)))
                                                                                                                      (cdr state))])))
@@ -869,19 +943,17 @@
 (define findMain
   (lambda (expr-list state return break continue throw class)
     (cond
-      [(null? expr-list)                            (error "There was a problem handling a function.")]
-      [(eq? (get-class expr-list) class)  (Mmain (getStmtList (firstExpr expr-list)) state return break continue throw class)]
-      [else                           (findMain (args expr-list) state return break continue throw class)])))
+      [(null? expr-list)                                                             (error "There was a problem handling a function.")]
+      [(eq? (getClassDec expr-list) class)          (Mmain (getStmtList (firstExpr expr-list)) state return break continue throw class)]
+      [else                                                      (findMain (args expr-list) state return break continue throw class)])))
 
+;finds the main function
 (define Mmain
   (lambda (expr-list state return break continue throw class)
   (cond
-    [(eq? (leftoperand (firstExpr expr-list)) `main)  (MstateList (mainBody expr-list) (addFrame state) return break continue throw (MgetState class state))]
-    [else                                                                                   (Mmain (args expr-list) state return break continue throw class)])))
-
-(define get-class
-  (lambda (expr-list)
-    (cadar expr-list)))
+    [(eq? (leftoperand (firstExpr expr-list)) `main)                                    (MstateList (mainBody expr-list) (addFrame state)
+                                                                                                   return break continue throw (MgetState class state))]
+    [else                                                                           (Mmain (args expr-list) state return break continue throw class)])))
 
 ; This handles expressions that define functions
 (define MfuncDef
@@ -901,87 +973,93 @@
   (lambda (expr state class)
     (list (cons 'this (operandn 2 expr)) (operandn 3 expr) (lambda (env) (functionState expr (outerLayerVars env) env)) class)))
 
+;updates the state with a new class
 (define Mclass
   (lambda (expr state throw)
     (StateUpdate (list (operand expr) (classClosure expr state throw)) state)))
 
+;handles the construction of a class closure when it has a super class
 (define classClosure
   (lambda (expr state throw)
     (list (superClass expr)
      (populateVars (getClosure (evalDefinitionList (getStmtList expr) (newstate))) (superClass expr) state)
      (getClosure (evalMethodList (getStmtList expr) (newstate) (className expr) throw)))))
 
-
+;handles a list of definitions
 (define evalDefinitionList
   (lambda (exprs state)
    (if (null? exprs)
       state
       (evalDefinitionList (modifiers exprs) (evalDefinition (operator exprs) state)))))
 
+;checks for valid var definitions
 (define evalDefinition
   (lambda (expr state)
     (cond
       ((eq? 'var (operator expr)) (declareDefinitions expr state))
       (else state))))
-  
+
+;declares defintions to the state
 (define declareDefinitions
   (lambda (expr state)
       (cond
         ((validOperand expr) (StateUpdate (list (operand expr) (rightoperand expr)) state))
         (else (StateUpdate (list (operand expr) '$null$) state)))))
 
-
+;handles a list of methods
 (define evalMethodList
  (lambda (stmts state class throw)
    (if (null? stmts)
       state
       (evalMethodList (modifiers stmts) (evalMethod (operator stmts) state class throw) class throw))))
 
+;deaclares a function when the operator are called
 (define evalMethod
   (lambda (expr state class throw)
     (cond
       ((or (eq? 'function (operator expr)) (eq? 'static-function (operator expr))) (declareFunction expr state class))
-      (else state))))
+      (else                                                                                                  state))))
 
+;declare the function in the state
 (define declareFunction
   (lambda (expr state class)
-    (StateUpdate (list (operand expr)
-            (functionClosure expr state class))
-            state)))
+    (StateUpdate (list (operand expr)  (functionClosure expr state class)) state)))
 
+;evalutes a dot expression when found
 (define evalDotExpression
   (lambda (expr state throw ctime-type function)
-    (evalRightDot (getRightDot expr)
-    (evalLeftDot (getLeftDot expr) state throw ctime-type)
-                         state throw ctime-type function)))
+    (evalRightDot           (getRightDot expr)
+    (evalLeftDot            (getLeftDot expr) state throw ctime-type) state throw ctime-type function)))
 
+;evaluates the value of the left side of a dot expression
 (define evalLeftDot
   (lambda (object state throw ctime-type)
      (cond
-      ((eq? object 'this)  (MgetState 'this state))
-      ((eq? object 'super) (objectClosure (superObj ctime-type) state ctime-type))
-      ((and (list? object) (eq? (operator object) 'funcall))
-       (MfuncVal object state throw ctime-type)) 
-      ((list? object)      (objectClosure object state ctime-type))
-      (else                (findCond object state ctime-type)))))
+      ((eq? object 'this)                                       (MgetState 'this state))
+      ((eq? object 'super)                                      (objectClosure (superObj ctime-type) state ctime-type))
+      ((and (list? object) (eq? (operator object) 'funcall))    (MfuncVal object state throw ctime-type)) 
+      ((list? object)                                           (objectClosure object state ctime-type))
+      (else                                                     (findCond object state ctime-type)))))
 
+;evaluates the right side of a dot expression
 (define evalRightDot
   (lambda (expr object state throw ctime-type function)
      (cond
-      ((eq? function #t) object)
-      (else (Mval expr (cons (cons (getObjVars (MgetState (getClass object) state))
-                       (cons (getObjVals object) '())) '()) throw ctime-type)))))
+      ((eq? function #t)                                                                        object)
+      (else                (Mval expr (cons (cons (getObjVars (MgetState (getClass object) state))
+                                             (cons (getObjVals object) '())) '()) throw ctime-type)))))
 
+;finds the this and super operators
 (define findThis
   (lambda (object state throw ctime-type)
      (cond
-      ((eq? object 'this)  (MgetState 'this state))
-      ((eq? object 'super) (MgetState 'this state))
-      ((and (list? object) (eq? (operator object) 'funcall))
-       (MfuncVal object state throw ctime-type)) 
-      ((list? object)      (objectClosure object state ctime-type))
-      (else                (findCond object state ctime-type)))))
+      ((eq? object 'this)                               (MgetState 'this state))
+      ((eq? object 'super)                                       (MgetState 'this state))
+      ((and (list? object) (eq? (operator object) 'funcall))     (MfuncVal object state throw ctime-type)) 
+      ((list? object)                                            (objectClosure object state ctime-type))
+      (else                                                     (findCond object state ctime-type)))))
 
+;creates the closure for an instance of an object
 (define objectClosure 
   (lambda (expr state ctime-type)
     (list (className expr) (objectVals (className expr) state ctime-type))))
@@ -990,11 +1068,11 @@
 (define functionState
   (lambda (expr outerVars state)
     (cond
-      [(null? outerVars)                                                                               (list (outerLayer state))]
+      [(null? outerVars)                                                                            (list (outerLayer state))]
       [(or (number? (unbox (getClosure outerVars))) (eq? (length (unbox (getClosure outerVars))) 1)) 
-                                                                                 (functionState expr (deepState outerVars) state)]
+                                                                             (functionState expr (deepState outerVars) state)]
       [(member?* 'function (getClosureBody (unbox (getClosure outerVars))))                                             state]
-      [else                                                                       (functionState expr (deepState outerVars) state)])))
+      [else                                                               (functionState expr (deepState outerVars) state)])))
 
 ; handles function calls from the parser 
 (define MfuncVal  
@@ -1008,6 +1086,7 @@
   (lambda (expr state return break continue throw ctime-type)
     (MfuncExecute expr state (lambda (v) state) (lambda (s) (continue s)) throw ctime-type)))
 
+;executes the function call
 (define MfuncExecute
   (lambda (expr state return continue throw ctime-type)
     (let* ((dotExpr (makeDotExp (getDot expr)))
@@ -1100,6 +1179,8 @@
 
 ;;;; ***************************************************
 ;;;; ***************************************************
+
+
 (define run-tests
   (lambda (i)
     (cond
@@ -1114,14 +1195,8 @@
                                  [expected-output (with-input-from-file (format "tests4/test~a-output.txt" i) read)])
                              (check-equal? (interpret test-file class-param) expected-output)))])))
 
-
-
-
  (run-tests 13)
 
-
-
-;(interpret "tests4/test11.txt" 'List)
 
 
 
