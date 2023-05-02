@@ -696,7 +696,7 @@
     (call/cc
       (lambda (break)
         (cond
-          [(Mbool condition state throw) (Mwhile condition expr (Mstate expr state return break 
+          [(Mbool condition state throw ctime-type) (Mwhile condition expr (Mstate expr state return break 
                                          (lambda (state2) (break (Mwhile condition expr state2 return throw ctime-type))) throw ctime-type) return throw ctime-type)]
           [else                                                                                                               state])))))
 
@@ -1194,12 +1194,12 @@
                                  [expected-output (with-input-from-file (format "tests4/test~a-output.txt" i) read)])
                              (check-equal? (interpret test-file class-param) expected-output)))])))
 
- (run-tests 13)
+; (run-tests 13)
 
 ; (run-tests 6)
 
 
-; (interpret "tests4/test13.txt" 'c)
+(interpret "tests4/test9.txt" 'Square)
 
 
 
