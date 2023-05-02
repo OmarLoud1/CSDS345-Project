@@ -410,7 +410,7 @@
       [(eq? (operator expr) '*) (*         (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
       [(eq? (operator expr) '/) (quotient  (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
       [(eq? (operator expr) '%) (remainder (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
-      [else                                                                            (error 'unknownop "Bad Operator")]))) 
+      [else                                                                            (Mval expr state throw ctime-type)]))) 
 
 
 
@@ -628,7 +628,7 @@
     (call/cc
       (lambda (break)
         (cond
-          [(Mbool condition state throw) (Mwhile condition expr (Mstate expr state return break 
+          [(Mbool condition state throw ctime-type) (Mwhile condition expr (Mstate expr state return break 
                                          (lambda (state2) (break (Mwhile condition expr state2 return throw ctime-type))) throw ctime-type) return throw ctime-type)]
           [else                                                                                                               state])))))
 
@@ -1116,7 +1116,7 @@
 ; (run-tests 6)
 
 
-(interpret "tests4/test9.txt" 'Square)
+(interpret "tests4/test11.txt" 'List)
 
 
 
