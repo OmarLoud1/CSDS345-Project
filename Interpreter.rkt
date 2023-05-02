@@ -1109,14 +1109,19 @@
                           (displayln (string-append "Executing Test " (format "~a" i)))
                           (displayln "no output: test passed! if error, it is thrown below:")
                           (displayln" ")
-                          (let* ([test-file (format "tests3/test~a.txt" i)]
+                          (let* ([test-file (format "tests4/test~a.txt" i)]
+                                 [class-param (with-input-from-file (format "tests4/test~a-class.txt" i) read)]
                                  [expected-output (with-input-from-file (format "tests4/test~a-output.txt" i) read)])
-                             (check-equal? (interpret (parser test-file)) expected-output)))])))
-
-; (run-tests 6)
+                             (check-equal? (interpret test-file class-param) expected-output)))])))
 
 
-(interpret "tests4/test11.txt" 'List)
+
+
+ (run-tests 13)
+
+
+
+;(interpret "tests4/test11.txt" 'List)
 
 
 
