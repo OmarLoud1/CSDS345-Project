@@ -804,21 +804,20 @@
         (MupdateExistingInstance var val state)
          '$null$)))
 
+;rechecks at which index a value is
 (define refreshIndex
   (lambda (index val l)
     (cond
       [(zero? index) (set-box (operator l) val)]
       [else (refreshIndex (- index 1) val (cdr l))])))
 
-;updates the 
+;updates the reversed list created above
 (define MupdateReverse
   (lambda (var val state ctime-type)
     (cond
       [(not (member?* 'this state))                               (MupdateExistingInstance var val state)]
       [else                        (refreshIndex (index? var (instanceVars ctime-type) #f)
                                                  val (reverse (instanceVals (MgetState 'this state))))])))
-
-
 
 ;returns the index of when a variable is first seen
 (define index?
