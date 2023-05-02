@@ -1194,12 +1194,9 @@
                                  [expected-output (with-input-from-file (format "tests4/test~a-output.txt" i) read)])
                              (check-equal? (interpret test-file class-param) expected-output)))])))
 
-; (run-tests 13)
-
-; (run-tests 6)
+ (run-tests 13)
 
 
-(interpret "tests4/test9.txt" 'Square)
 
 
 
