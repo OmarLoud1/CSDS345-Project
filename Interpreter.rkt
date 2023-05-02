@@ -314,6 +314,7 @@
     (cond 
       [(null? list)                                                          #f]
       [(list? (car list))  (or (member?* a (car list)) (member?* a (cdr list)))]
+      ;[(and (box? (car list)) (list? (unbox (car list))))    (or (member?* a (unbox (car list))) (member?* a (cdr list)))]
       [(eq? a (car list))                                                    #t]
       [else                                             (member?* a (cdr list))])))
 
@@ -436,7 +437,7 @@
 (define MgetState
   (lambda (varName state)
     (cond
-      [(null? state)                             (error 'gStateError (string-append "The variable has not been declared." (format "~a" varName)))]
+      [(null? state)                             (error 'gStateError (string-append "The variable has not been declared: " (format "~a" varName)))]
       [(contains? varName (stateVars state))                          (MgetStateLayer varName (car state))]
       [else                                                                 (MgetState varName (cdr state))])))
 
@@ -604,6 +605,7 @@
      [(intexp? expr state)                                 (Minteger expr state throw ctime-type)]
      [(and (list? expr) (eq? 'funcall (operator expr)))    (MfuncVal expr state throw ctime-type)]
      [(and (list? expr) (eq? 'new (operator expr)))         (objectClosure expr state ctime-type)]
+     [(eq? expr '$null$) 0]
      [(and (list? expr) (eq? 'dot (operator expr)))    (evalDotExpression expr state throw ctime-type #f)]
      [(list? expr)                                                                           expr]
      [(eq? (MgetStateProtected expr state) '$null$)                     (findCond expr state ctime-type)]
@@ -615,7 +617,7 @@
 (define Mif
   (lambda (condition expr exprelse state return break continue throw ctime-type)
     (cond
-      [(eq? (Mbool condition state throw) #t)     (Mstate expr state return break continue throw ctime-type)]
+      [(eq? (Mbool condition state throw ctime-type) #t)     (Mstate expr state return break continue throw ctime-type)]
       [(not(null? exprelse))                      (Mstate exprelse state return break continue throw ctime-type)]
       [else                                                                                 state])))
 
@@ -679,20 +681,21 @@
   (lambda (varName val state throw ctime-type)
     (cond
       [(null? state)                                              '$null$] ; (error 'gStateError "The variable has not been declared.")
-      [(and (eq? (operator varName) 'dot)
+      [(and (eq? (protectedOperator varName) 'dot)
             (not (null? (MupdateInstance (dotAssignStmt varName) val
                                  (cons (cons (getObjVars (findCond (getClass (evalDotExpression varName state throw ctime-type #t)) state ctime-type))
                                              (cons (getObjVals (evalDotExpression varName state throw ctime-type #t)) '()))
                                        '())))))
        state]
-      [(contains? varName (stateVars state))  (cons (begin (Mupdate_layer varName val (car state) ctime-type) (car state)) (cdr state))]
-      [else                                        (cons (car state) (MupdateStaticProtected varName val (cdr state) throw))])))
+      [(contains? varName (stateVars state))  (cons (begin (Mupdate_layer varName val (car state)) (car state)) (cdr state))]
+      [else                                        (MupdateStaticProtected varName val state ctime-type)])))
+      ;[else                                        (cons (car state) (MupdateStaticProtected varName val (cdr state) throw))])))
 
 (define MupdateInstance
   (lambda (var val state)
     (if (member?* var state)
         (MupdateExistingInstance var val state)
-        (error 'gStateError (string-append "That variable does not exist:" (format "~a" var))))))
+        (error 'gStateError (string-append "That variable does not exist: " (format "~a" var))))))
 
 (define MupdateExistingInstance
   (lambda (var val state)
@@ -707,18 +710,39 @@
       [(and (eq? '$null$ (MupdateCheck var val state)) (not (null? (MupdateReverse var val state ctime-type)))) state]
       [else (MupdateInstance var val state)])))
 
+
+(define contained?*
+  (lambda (var state)
+    (cond
+      [(null? state) #f]
+      [(contained? var (vars (firstExpr state))) #t]
+      [else (contained?* var (args state))])))
+
+(define contained?
+  (lambda (var state)
+    (cond
+      [(null? state) #f]
+      [(eq? var (car state)) #t]
+      [else (contained? var (cdr state))])))
+
 ; Changes the binding of the variable if it exists in the environment
 (define MupdateCheck
   (lambda (var val state)
-    (if (member?* var state)
+    (if (contained?* var state)
         (MupdateExistingInstance var val state)
-         (error 'gStateError (string-append "That variable does not exist:" (format "~a" var))))))
+         '$null$)))
+
+(define refreshIndex
+  (lambda (index val l)
+    (cond
+      [(zero? index) (set-box (operator l) val)]
+      [else (refreshIndex (- index 1) val (cdr l))])))
 
 (define MupdateReverse
   (lambda (var val state ctime-type)
     (cond
       [(not (member?* 'this state)) (MupdateExistingInstance var val state)]
-      [else (unbox (operandn (+ 1 (index? var (instanceVars ctime-type) #f)) (reverse (instanceVals (MgetState 'this state)))))])))
+      [else (refreshIndex (index? var (instanceVars ctime-type) #f) val (reverse (instanceVals (MgetState 'this state))))])))
 
 (define instanceVars caadr)
 (define instanceVals cadr)
@@ -1092,7 +1116,7 @@
 ; (run-tests 6)
 
 
-(interpret "tests4/test8.txt" 'Square)
+(interpret "tests4/test9.txt" 'Square)
 
 
 
