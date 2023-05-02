@@ -431,7 +431,7 @@
       [(eq? (operator expr) '>)                 (> (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
       [(eq? (operator expr) '<=)               (<= (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
       [(eq? (operator expr) '>=)               (>= (Mval (leftoperand expr) state throw ctime-type) (Mval (rightoperand expr) state throw ctime-type))]
-      [else                                                                                    (error 'unknownop "Bad Operator")])))
+      [else                                                                                    (Mval expr state throw ctime-type)])))
 
 ; Gets the state of the variable from state
 (define MgetState
